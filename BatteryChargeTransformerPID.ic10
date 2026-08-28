@@ -1,0 +1,77 @@
+# Battery-to-battery charge PID: holds the average charge of all Large Station
+# Batteries on the network at TargetRatio by adjusting a Transformer's Setting.
+# Auto-pauses above PauseAboveRatio and resumes once ratio drops back below
+# ResumeBelowRatio (hysteresis band).
+alias Transformer d1
+
+define BatteryPrefab HASH("StructureBatteryLarge")
+define TargetRatio 0.50
+define PauseAboveRatio 0.55
+define ResumeBelowRatio 0.53
+define Kp 4
+define Ki 0.6
+define Kd 0.15
+define TickSeconds 0.5
+define SettingMin 0
+define SettingMax 50000
+define IntegralClamp 25000
+define IntegralClampMin -25000
+
+move r10 0
+move r11 0
+move r15 0
+
+MainLoop:
+lb r1 BatteryPrefab Ratio Average
+l r2 Transformer Setting
+
+bnez r15 CheckResume
+sge r3 r1 PauseAboveRatio
+bnez r3 EnterPause
+j Run
+
+CheckResume:
+slt r3 r1 ResumeBelowRatio
+bnez r3 Resume
+j Paused
+Resume:
+move r15 0
+j Run
+EnterPause:
+move r15 1
+j Paused
+
+Run:
+sub r3 TargetRatio r1
+mul r4 r3 TickSeconds
+add r10 r10 r4
+min r10 r10 IntegralClamp
+max r10 r10 IntegralClampMin
+
+sub r5 r3 r11
+div r5 r5 TickSeconds
+
+mul r6 Kp r3
+mul r7 Ki r10
+mul r8 Kd r5
+add r6 r6 r7
+add r6 r6 r8
+
+add r9 r2 r6
+max r9 r9 SettingMin
+min r9 r9 SettingMax
+
+s Transformer On 1
+s Transformer Setting r9
+move r11 r3
+
+yield
+j MainLoop
+
+Paused:
+s Transformer On 0
+move r10 0
+move r11 0
+
+yield
+j MainLoop

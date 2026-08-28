@@ -1,0 +1,96 @@
+# Routes a selected silo through an ordered list of digital splitters.
+# Printer command interface: silo number at slot 510 and command 1 at slot 511.
+# Slot 509 is reserved for this router's busy flag.
+# Slots 16 and 17 retain the known prefab hashes for reference only:
+# straight $1BD047 and flipped $1644B4. These are not ReferenceIds and cannot
+# be used as targets for `s`.
+#
+# Silo route map: fill slots 32..95 with packed route words indexed by silo.
+# For example, slot 32 is silo 0, slot 33 is silo 1, and so on. The route word's
+# bottom four bits are splitter count; each following bit selects straight (0)
+# or flipped (1) at the next node.
+# Store one shared dual-linked graph in slots 128..479.
+# A node uses three consecutive slots:
+#   node + 0: digital splitter ReferenceId
+#   node + 1: straight map (next node location, or a negative cul-de-sac)
+#   node + 2: flipped map (next node location, or a negative cul-de-sac)
+# Both maps can point to reusable nodes. A negative selected map ends the route
+# after setting this splitter.
+#
+# For example, route word $b00110011 selects three splitters in the directions
+# 1, 1, 0. A zero route word leaves the splitter settings unchanged. Use
+# SiloSplitterRouterBlankLayout.ic10 to write the shared graph.
+#
+# Use SiloSplitterRouterBlankLayout.ic10 on a separate IC to program the blank
+# three-straight, three-flipped-branch layout into this router's middle stack.
+
+define STRAIGHT_SPLITTER_HASH_SLOT 16
+define FLIPPED_SPLITTER_HASH_SLOT 17
+define STRAIGHT_SPLITTER_HASH $1BD047
+define FLIPPED_SPLITTER_HASH $1644B4
+define SILO_ROUTE_START 32
+define SILO_0_ROUTE $b00000100
+define ROOT_NODE 128
+define NODE_START 128
+define NODE_END 479
+define MAX_HOPS 15
+define BUSY_SLOT 509
+define ARG_SLOT 510
+define CMD_SLOT 511
+define CMD_ROUTE 1
+
+move r0 0
+move r1 0
+move r2 0
+move r3 0
+put db STRAIGHT_SPLITTER_HASH_SLOT STRAIGHT_SPLITTER_HASH
+put db FLIPPED_SPLITTER_HASH_SLOT FLIPPED_SPLITTER_HASH
+put db SILO_ROUTE_START SILO_0_ROUTE
+
+Loop:
+get r0 db CMD_SLOT
+beqz r0 WaitLoop
+beq r0 CMD_ROUTE Route
+j Clear
+Route:
+move r0 1
+put db BUSY_SLOT r0
+get r1 db ARG_SLOT
+bltz r1 Clear
+add r1 r1 SILO_ROUTE_START
+get r1 db r1
+and r2 r1 15
+beqz r2 Clear
+bgt r2 MAX_HOPS Clear
+srl r1 r1 4
+move r4 ROOT_NODE
+FollowRoute:
+blt r4 NODE_START Clear
+bgt r4 NODE_END Clear
+get r3 db r4
+beqz r3 Clear
+and r5 r1 1
+beqz r5 SetStraight
+s r3 Setting 1
+add r5 r4 2
+j GetNext
+SetStraight:
+s r3 Setting 0
+add r5 r4 1
+GetNext:
+get r4 db r5
+sub r2 r2 1
+srl r1 r1 1
+beqz r2 Clear
+bltz r4 Clear
+beqz r4 Clear
+j FollowRoute
+Clear:
+move r0 0
+put db CMD_SLOT r0
+put db ARG_SLOT r0
+put db BUSY_SLOT r0
+s db Setting r0
+WaitLoop:
+yield
+j Loop

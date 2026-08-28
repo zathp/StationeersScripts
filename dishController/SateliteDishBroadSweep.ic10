@@ -1,0 +1,62 @@
+# Broad sweep worker for split satellite scripts
+# d0 dish
+# d1 shared memory queue
+# Stack slots on shared memory:
+# 2 mode (0 force broad, 1 force narrow, 2 auto-broad, 3 auto-narrow)
+# 3 center horizontal
+# 4 center vertical
+
+alias dish d0
+alias queue d1
+
+define ModeSlot 2
+define CenterHSlot 3
+define CenterVSlot 4
+
+Loop:
+get r2 queue ModeSlot
+seq r0 r2 0
+bgtz r0 Active
+seq r0 r2 2
+bgtz r0 Active
+j Hold
+
+Active:
+
+s dish BestContactFilter -1
+l r3 dish SignalStrength
+sgtz r4 r3
+bgtz r4 HandoffCheck
+
+l r0 dish Horizontal
+add r0 r0 30
+blt r0 360 SetH
+sub r0 r0 360
+l r1 dish Vertical
+add r1 r1 15
+blt r1 91 SetV
+move r1 15
+
+SetV:
+s dish Vertical r1
+SetH:
+s dish Horizontal r0
+yield
+j Loop
+
+HandoffCheck:
+seq r0 r2 2
+beqz r0 SetV
+
+Handoff:
+l r0 dish Horizontal
+l r1 dish Vertical
+put queue CenterHSlot r0
+put queue CenterVSlot r1
+put queue ModeSlot 3
+yield
+j Loop
+
+Hold:
+yield
+j Loop

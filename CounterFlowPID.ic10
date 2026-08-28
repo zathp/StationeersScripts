@@ -1,0 +1,112 @@
+alias PauseSwitch d0
+alias PipeAnalyser d1
+alias VolumePump d2
+alias OutputPump d3
+alias BypassPump d4
+alias InputPipeAnalyser d5
+
+define VentH HASH("StructurePoweredVentLarge")
+
+define TargetTemp 298.15
+define Kp 1.2
+define Ki 0.08
+define Kd 0.25
+define TickSeconds 0.5
+define OutputPumpMinPressure 10000
+define InputMinPressure 10000
+
+define SettingMin 0.001
+define SettingMax 20
+define PumpSettingMax 10
+define IntegralClamp 25
+define IntegralClampMin -5
+define DeadbandK 0.05
+
+move r10 0
+move r11 0
+move r15 0
+
+MainLoop:
+l r0 PauseSwitch Setting
+l r1 PipeAnalyser Temperature
+l r13 PipeAnalyser Pressure
+l r14 InputPipeAnalyser Pressure
+l r2 VolumePump Setting
+
+blez r0 Paused
+slt r6 r14 InputMinPressure
+bnez r6 Paused
+sb VentH On 1
+bnez r15 VentReady
+move r15 1
+yield
+j MainLoop
+
+VentReady:
+sub r3 TargetTemp r1
+abs r4 r3
+ble r4 DeadbandK Hold
+
+mul r5 r3 TickSeconds
+add r10 r10 r5
+min r10 r10 IntegralClamp
+max r10 r10 IntegralClampMin
+
+sub r6 r3 r11
+div r6 r6 TickSeconds
+
+mul r7 Kp r3
+mul r8 Ki r10
+mul r9 Kd r6
+add r7 r7 r8
+add r7 r7 r9
+
+add r12 r2 r7
+sub r5 r12 PumpSettingMax
+max r5 r5 0
+max r12 r12 SettingMin
+min r12 r12 PumpSettingMax
+
+s VolumePump On 1
+s VolumePump Setting r12
+sgt r13 r13 OutputPumpMinPressure
+and r13 r13 r0
+s OutputPump On r13
+sgt r4 r3 0
+sgt r6 r5 0
+and r4 r4 r6
+mul r5 r5 r4
+min r5 r5 PumpSettingMax
+s BypassPump On r4
+s BypassPump Setting r5
+move r11 r3
+
+yield
+j MainLoop
+
+Hold:
+blez r0 Paused
+min r2 r2 PumpSettingMax
+s VolumePump On 1
+s VolumePump Setting r2
+sgt r13 r13 OutputPumpMinPressure
+and r13 r13 r0
+s OutputPump On r13
+s BypassPump On 0
+s BypassPump Setting 0
+move r11 r3
+
+yield
+j MainLoop
+
+Paused:
+sb VentH On 0
+s VolumePump On 0
+s VolumePump Setting 0
+s OutputPump On 0
+s BypassPump On 0
+s BypassPump Setting 0
+move r15 0
+
+yield
+j MainLoop

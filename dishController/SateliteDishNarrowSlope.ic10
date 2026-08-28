@@ -1,0 +1,128 @@
+alias dish d0
+alias queue d1
+alias SP d4
+define ModeSlot 2
+define CenterHSlot 3
+define CenterVSlot 4
+define ResolveIgnore 1000
+define WaitTicks 8
+move r5 1
+move r6 1
+move r7 -1
+move r9 0
+move r11 0
+Loop:
+get r10 queue ModeSlot
+seq r0 r10 1
+bgtz r0 Active
+seq r0 r10 3
+bgtz r0 Active
+move r7 -1
+move r9 0
+yield
+j Loop
+Active:
+get r2 queue CenterHSlot
+get r3 queue CenterVSlot
+l r4 SP Setting
+max r2 r2 0
+min r2 r2 360
+max r3 r3 0
+min r3 r3 90
+max r4 r4 1
+min r4 r4 90
+sub r12 r2 r4
+add r13 r2 r4
+max r12 r12 0
+min r13 r13 360
+sub r14 r3 r4
+add r15 r3 r4
+max r14 r14 0
+min r15 r15 90
+bgtz r9 WaitWindow
+beq r7 -1 Center
+beqz r11 StepH
+StepV:
+l r0 dish Vertical
+add r0 r0 r6
+blt r0 r14 VLow
+bgt r0 r15 VHigh
+j VApply
+VLow:
+move r0 r14
+move r6 1
+j VApply
+VHigh:
+move r0 r15
+move r6 -1
+VApply:
+s dish Vertical r0
+j AStep
+StepH:
+l r0 dish Horizontal
+add r0 r0 r5
+blt r0 r12 HLow
+bgt r0 r13 HHigh
+j HApply
+HLow:
+move r0 r12
+move r5 1
+j HApply
+HHigh:
+move r0 r13
+move r5 -1
+HApply:
+s dish Horizontal r0
+j AStep
+Center:
+s dish Horizontal r2
+s dish Vertical r3
+WaitWindow:
+yield
+sub r9 r9 1
+bgtz r9 Loop
+l r0 dish Horizontal
+l r1 dish Vertical
+put queue 0 r0
+put queue 1 r1
+j Loop
+AStep:
+yield
+l r8 dish SignalStrength
+beq r8 -1 Lost
+l r0 dish WattsReachingContact
+l r1 dish MinimumWattsToContact
+sub r0 r1 r0
+max r0 r0 0
+bgt r0 ResolveIgnore IgnoreResolve
+bgtz r9 CheckSlope
+move r9 WaitTicks
+j CheckSlope
+IgnoreResolve:
+move r9 0
+CheckSlope:
+beq r7 -1 Store
+sub r1 r8 r7
+bgtz r1 Store
+beqz r11 FlipH
+mul r6 r6 -1
+j Store
+FlipH:
+mul r5 r5 -1
+Store:
+move r7 r8
+beqz r11 ToV
+move r11 0
+j Loop
+ToV:
+move r11 1
+j Loop
+Lost:
+move r7 -1
+move r9 0
+seq r0 r10 3
+beqz r0 LostDone
+put queue ModeSlot 2
+LostDone:
+yield
+j Loop

@@ -1,0 +1,112 @@
+# chip 1 controller: d1 door lever, d2 atmosphere switch, d3 status
+alias DoorLever d1
+alias AtmoSwitch d2
+alias StateMem d3
+
+define GasH HASH("StructureGasSensor")
+define GasN HASH("7x7 Hangar East Gas Sensor")
+define ExtTarget 0
+define IntTarget 75
+define maxCount 10
+
+alias state r8
+alias counter r9
+
+move state 0
+move counter 0
+s db Setting state
+j main
+
+main:
+l r0 DoorLever Setting
+l r1 AtmoSwitch Setting
+and r2 r1 r0
+lbn r3 GasH GasN Pressure Average
+add r4 state 1
+jr r4
+j state0
+j state1
+j state2
+j state3
+j state4
+j state5
+j state6
+endSwitch:
+j publish
+
+state0: #doors open
+beqz r0 endSwitch
+move state 1 #doors closed ext atmo
+j endSwitch
+
+state1: #doors closed ext atmo
+bnez r0 state1if1
+move state 0 #doors open
+j endSwitch
+state1if1:
+beqz r1 endSwitch
+move counter 0
+move state 2 #closed depress ext atmo
+
+state2: #closed depress ext atmo
+bnez r2 state2if1
+move state 3 #closed press ext atmo
+j endSwitch
+state2if1:
+bnez r3 state2counterReset
+add counter counter 1
+ble counter maxCount endSwitch
+move state 5 #closed press int atmo
+j endSwitch
+state2counterReset:
+move counter 0
+j endSwitch
+
+state3: #closed press ext atmo
+beqz r2 state3if1
+move counter 0
+move state 2 #closed depress ext atmo
+j endSwitch
+state3if1:
+blt r3 ExtTarget endSwitch
+move state 1 #closed ext atmo
+j endSwitch
+
+state4: #closed depress int atmo
+beqz r2 state4if1
+move state 5 #closed press int atmo
+j endSwitch
+state4if1:
+bnez r3 state4counterReset
+add counter counter 1
+ble counter maxCount endSwitch
+move state 3 #closed press ext atmo
+j endSwitch
+state4counterReset:
+move counter 0
+j endSwitch
+
+state5: #closed press int atmo
+bnez r2 state5if1
+move counter 0
+move state 4 #closed depress int atmo
+j endSwitch
+state5if1:
+blt r3 IntTarget endSwitch
+move state 6 #closed int atmo
+j endSwitch 
+
+state6: #closed int atmo
+bnez r2 endSwitch
+move counter 0
+move state 4 #closed depress int atmo
+j endSwitch
+
+publish:
+s db Setting state
+seq r6 state 0
+seq r7 state 1
+or r6 r6 r7
+s StateMem Setting r6
+yield
+j main

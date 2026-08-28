@@ -1,0 +1,67 @@
+# Filtration mode + O2 guard controller
+# Place this IC in the filtration unit.
+# d0 should be the device you want to turn on when O2 is too low.
+alias outDev d0
+alias alarmLight d1
+
+# Percent threshold: if CO2 rises above this, set filtration mode to CO2.
+define Co2RisePct 5
+
+# Base O2 floor percent before CO2 offset.
+define O2BasePct 60
+
+# Filtration mode values.
+define ModeIdle 0
+define ModeCo2 1
+
+# Minimum average quantity allowed per device (from slot 0 and 1).
+define LowAvgQty 25
+
+MainLoop:
+# Read pipe composition ratios from this filtration device.
+l r0 db RatioCarbonDioxideInput
+l r1 db RatioOxygenInput
+
+# Convert ratios (0..1) to percent (0..100).
+mul r0 r0 100
+mul r1 r1 100
+
+# Set filtration mode through db based on CO2 threshold.
+sgt r2 r0 Co2RisePct
+beqz r2 SetIdle
+s db Mode ModeCo2
+j CheckO2
+
+SetIdle:
+s db Mode ModeIdle
+
+CheckO2:
+# Turn d0 on if O2 < (O2BasePct - CO2%).
+sub r3 O2BasePct r0
+slt r4 r1 r3
+s outDev On r4
+
+# Turn on d1 if either device average slot quantity is below LowAvgQty.
+move r12 0
+
+# Base device average = (slot0 + slot1) / 2.
+ls r5 db 0 Quantity
+ls r6 db 1 Quantity
+add r7 r5 r6
+div r7 r7 2
+slt r9 r7 LowAvgQty
+or r12 r12 r9
+
+# Output/sleeper device average = (slot0 + slot1) / 2.
+ls r5 outDev 0 Quantity
+ls r6 outDev 1 Quantity
+add r7 r5 r6
+div r7 r7 2
+slt r9 r7 LowAvgQty
+or r12 r12 r9
+
+SetAlarmOutput:
+s alarmLight On r12
+
+yield
+j MainLoop

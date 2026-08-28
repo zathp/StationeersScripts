@@ -1,0 +1,122 @@
+alias EnableLever d0
+alias FillPump d1
+alias HeatExchangerValve d2
+alias OutputPump d3
+alias SectionAnalyser d4
+alias OutputAnalyser d5
+define PipeAnalyserH HASH("StructurePipeAnalysizer")
+define MinimumPressureN HASH("Pipe Analyzer In")
+define FillTargetKpa 2000
+define MinimumOperatingKpa 4000
+define OutputTargetTemp 285.15
+define EmptyPressureKpa 100
+define SettleLoops 3
+define Kp 0.8
+define Ki 0.04
+define Kd 0.1
+define TickSeconds 0.5
+define PidDirection 1
+define IntegralClamp 100
+define IntegralClampMin -100
+define CoolingSetpointMin 250.15
+define CoolingSetpointMax 350.15
+define DeadbandK 0.05
+define StateFill 1
+define StateCool 2
+define StateSettle 3
+define StatePumpOut 4
+alias state r14
+alias settleCount r13
+alias integral r10
+alias previousError r11
+alias coolingSetpoint r12
+move state StateFill
+move settleCount 0
+move integral 0
+move previousError 0
+move coolingSetpoint OutputTargetTemp
+MainLoop:
+l r0 EnableLever Setting
+l r1 SectionAnalyser Pressure
+l r2 SectionAnalyser Temperature
+lbn r3 PipeAnalyserH MinimumPressureN Pressure Maximum
+l r4 OutputAnalyser Temperature
+blez r0 Disabled
+jal UpdatePid
+beq state StateFill CheckMinimumPressure
+beq state StateCool Cool
+beq state StateSettle Settle
+beq state StatePumpOut PumpOut
+move state StateFill
+j MainLoop
+CheckMinimumPressure:
+blt r3 MinimumOperatingKpa Disabled
+j Fill
+Fill:
+s HeatExchangerValve On 0
+s OutputPump On 0
+s FillPump On 1
+blt r1 FillTargetKpa EndLoop
+s FillPump On 0
+move state StateCool
+j EndLoop
+Cool:
+s FillPump On 0
+s OutputPump On 0
+s HeatExchangerValve On 1
+bgt r2 coolingSetpoint EndLoop
+s HeatExchangerValve On 0
+move settleCount 0
+move state StateSettle
+j EndLoop
+Settle:
+s FillPump On 0
+s HeatExchangerValve On 0
+s OutputPump On 0
+add settleCount settleCount 1
+blt settleCount SettleLoops EndLoop
+move state StatePumpOut
+j EndLoop
+PumpOut:
+s FillPump On 0
+s HeatExchangerValve On 0
+s OutputPump On 1
+bgt r1 EmptyPressureKpa EndLoop
+s OutputPump On 0
+move state StateFill
+j EndLoop
+Disabled:
+s FillPump On 0
+s HeatExchangerValve On 0
+s OutputPump On 0
+move state 0
+move settleCount 0
+move integral 0
+move previousError 0
+move coolingSetpoint OutputTargetTemp
+EndLoop:
+s db Setting state
+yield
+j MainLoop
+UpdatePid:
+sub r5 OutputTargetTemp r4
+abs r6 r5
+ble r6 DeadbandK PidHold
+mul r6 r5 TickSeconds
+add integral integral r6
+min integral integral IntegralClamp
+max integral integral IntegralClampMin
+sub r7 r5 previousError
+div r7 r7 TickSeconds
+mul r8 Kp r5
+mul r9 Ki integral
+add r8 r8 r9
+mul r9 Kd r7
+add r8 r8 r9
+mul r8 PidDirection r8
+add coolingSetpoint coolingSetpoint r8
+max coolingSetpoint coolingSetpoint CoolingSetpointMin
+min coolingSetpoint coolingSetpoint CoolingSetpointMax
+PidHold:
+move previousError r5
+j ra

@@ -1,0 +1,98 @@
+# Evaporation chamber PID temperature hold.
+# Control goal: keep chamber temperature at 183.15 K by adjusting pressure Setting.
+# Lower Setting => more evaporation => lower temperature.
+
+alias EvapChamber d0
+
+# Temperature target (K).
+define TargetTemp 183.15
+
+# PID gains (tune these).
+define Kp 1.2
+define Ki 0.08
+define Kd 0.25
+
+# Tick time in seconds (IC10 yield is typically ~0.5s).
+define TickSeconds 0.5
+
+# Startup reset setting before PID takes over.
+define StartupSetting 1
+
+# Output clamp for chamber pressure Setting.
+# Tune these for your chamber/plumbing hardware.
+define SettingMin 1
+define SettingMax 2000
+
+# Integral anti-windup clamp is tied to output clamp values.
+define IntegralClampMin 1
+define IntegralClamp 2000
+
+# Optional deadband in K to reduce tiny oscillations around setpoint.
+define DeadbandK 0.03
+
+# Persistent PID state.
+move r10 0   # integral
+move r11 0   # previous error
+move r15 SettingMin   # previous commanded setting
+
+# Startup reset: force chamber to known baseline and mirror to db.
+s EvapChamber Setting StartupSetting
+s db Setting StartupSetting
+move r15 StartupSetting
+
+MainLoop:
+# Read current chamber temperature and current pressure setpoint.
+l r0 EvapChamber Temperature
+l r1 EvapChamber Setting
+
+# error = target - current
+# If too hot: error < 0 => command decreases Setting (more evaporation cooling).
+sub r2 TargetTemp r0
+
+# deadband check: if |error| <= DeadbandK, keep current Setting and skip PID update.
+abs r3 r2
+ble r3 DeadbandK Hold
+
+# integral += error * dt
+mul r4 r2 TickSeconds
+add r10 r10 r4
+min r10 r10 IntegralClamp
+max r10 r10 IntegralClampMin
+
+# derivative = (error - prevError) / dt
+sub r5 r2 r11
+div r5 r5 TickSeconds
+
+# pidDelta = Kp*error + Ki*integral + Kd*derivative
+mul r6 Kp r2
+mul r7 Ki r10
+mul r8 Kd r5
+add r9 r6 r7
+add r9 r9 r8
+
+# newSetting = currentSetting + pidDelta
+add r12 r1 r9
+
+# Clamp actuator output.
+max r12 r12 SettingMin
+min r12 r12 SettingMax
+
+# Apply new pressure target.
+s EvapChamber Setting r12
+s db Setting r12
+move r15 r12
+
+# Save state.
+move r11 r2
+
+yield
+j MainLoop
+
+Hold:
+# Keep previous commanded pressure target and preserve previous error for smooth restart.
+s EvapChamber Setting r15
+s db Setting r15
+move r11 r2
+
+yield
+j MainLoop

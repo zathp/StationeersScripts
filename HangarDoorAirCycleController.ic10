@@ -1,0 +1,85 @@
+# d0 = controller housing, d1 = console/LED display
+# Writes door-state text and LED color from the same controller state.
+alias Controller d0
+alias Display d1
+
+# State values from the hangar controller.
+define StateOpen 0
+define StateClosed 1
+define StateDepress 2
+define StateExtPress 3
+define StateO2Press 4
+define StateO2Depress 5
+define StateFilled 5
+
+# Console text strings (max 6 chars for IC10 STR).
+define TxtOpen STR("OPEN")
+define TxtClosed STR("CLOSED")
+define TxtDepress STR("EDEPRS")
+define TxtExtPress STR("EPRESS")
+define TxtO2Press STR("O2PRES")
+define TxtO2Depress STR("O2DEPR")
+define TxtFilled STR("FULL")
+define TxtUnknown STR("UNKNWN")
+
+# LED color enum values (0-15 style).
+define ColorRed 2
+define ColorYellow 4
+define ColorGreen 5
+
+main:
+s Display Mode 10
+l r0 Controller Setting
+beq r0 StateOpen showOpen
+beq r0 StateClosed showClosed
+beq r0 StateDepress showDepress
+beq r0 StateExtPress showExtPress
+beq r0 StateO2Press showO2Press
+beq r0 StateO2Depress showO2Depress
+beq r0 StateFilled showFilled
+s Display Setting TxtUnknown
+s Display Color ColorRed
+yield
+j main
+
+showOpen:
+s Display Setting TxtOpen
+s Display Color Color.Green
+yield
+j main
+
+showClosed:
+s Display Setting TxtClosed
+s Display Color Color.Red
+yield
+j main
+
+showDepress:
+s Display Setting TxtDepress
+s Display Color Color.Yellow
+yield
+j main
+
+showExtPress:
+s Display Setting TxtExtPress
+s Display Color Color.Yellow
+yield
+j main
+
+showO2Press:
+s Display Setting TxtO2Press
+s Display Color Color.Yellow
+yield
+j main
+
+showO2Depress:
+s Display Setting TxtO2Depress
+s Display Color Color.Yellow
+yield
+j main
+
+showFilled:
+s Display Setting TxtFilled
+s Display Color Color.Green
+yield
+j main

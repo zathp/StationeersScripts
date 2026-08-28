@@ -1,0 +1,273 @@
+# Linked-list backed airlock controller.
+# Wire:
+# d0 = IC housing running StackBasedLinkedListCon.ic10
+# d1 = Gas sensor (Pressure)
+# d2 = Override switch (non-zero = hold both doors open)
+# This script publishes active state to this housing Setting for the actuator script.
+
+define Door1H -793837322
+define Door1NH HASH("Airlock Interior")
+define Door2H -793837322
+define Door2NH HASH("Airlock Exterior")
+define ButtH 491845673
+define ButtN HASH("Button")
+
+define IntKpa 0
+define ExtKpa 0
+
+alias StackCon d0
+alias GasSen d1
+alias Override d2
+
+define MAGIC 27527
+define INIT_SLOT 0
+define LIST_HEAD_SLOT 1
+define LIST_COUNT_SLOT 4
+define NODE_BASE_SLOT 5
+define NODE_SIZE_SLOT 6
+
+define CMD_SLOT 511
+define CMD_COUNT 510
+define CMD_DATA_START 509
+
+define CMD_FLAG_DELETE $b100000000000
+define CMD_FLAG_WRITE $b010000000000
+
+alias state r8
+alias lastPress r9
+
+startup:
+move lastPress 0
+jal WaitForStackReady
+jal EnsureQueueSeeded
+jal GetHeadState
+move state r0
+s db Setting state
+yield
+
+start:
+jal GetHeadState
+move state r0
+
+jal CheckOverride
+
+jal SearchForPress
+not r1 lastPress
+and r1 r1 r0
+move lastPress r0
+beqz r1 skipQueueRoute
+move r0 state
+jal QueueRouteForState
+skipQueueRoute:
+
+jal MaybeAdvanceState
+jal GetHeadState
+move state r0
+s db Setting state
+yield
+j start
+
+WaitForStackReady:
+get r0 StackCon INIT_SLOT
+beq r0 MAGIC WaitReadyDone
+yield
+j WaitForStackReady
+WaitReadyDone:
+j ra
+
+WaitForStackIdle:
+l r0 StackCon Setting
+beqz r0 WaitIdleDone
+yield
+j WaitForStackIdle
+WaitIdleDone:
+j ra
+
+GetListCount:
+get r0 StackCon LIST_COUNT_SLOT
+j ra
+
+GetHeadState:
+jal GetListCount
+beqz r0 HeadStateDefault
+get r1 StackCon LIST_HEAD_SLOT
+bltz r1 HeadStateDefault
+get r2 StackCon NODE_BASE_SLOT
+get r3 StackCon NODE_SIZE_SLOT
+mul r4 r1 r3
+add r4 r4 r2
+add r4 r4 3
+get r0 StackCon r4
+j ra
+HeadStateDefault:
+move r0 1
+j ra
+
+QueuePushState:
+push ra
+push r1
+push r2
+move r2 r0
+jal WaitForStackIdle
+put StackCon CMD_COUNT 1
+put StackCon CMD_DATA_START r2
+move r1 CMD_FLAG_WRITE
+put StackCon CMD_SLOT r1
+s StackCon Setting 1
+jal WaitForStackIdle
+pop r2
+pop r1
+pop ra
+j ra
+
+QueuePopHead:
+push ra
+push r1
+jal WaitForStackIdle
+move r1 CMD_FLAG_DELETE
+put StackCon CMD_SLOT r1
+put StackCon CMD_COUNT 1
+s StackCon Setting 1
+jal WaitForStackIdle
+pop r1
+pop ra
+j ra
+
+ClearQueue:
+push ra
+ClearQueueLoop:
+jal GetListCount
+beqz r0 ClearQueueDone
+jal QueuePopHead
+j ClearQueueLoop
+ClearQueueDone:
+pop ra
+j ra
+
+GetInitialIdleState:
+lbn r0 Door1H Door1NH Open Maximum
+lbn r1 Door2H Door2NH Open Maximum
+sgtz r1 r1
+xor r2 1 r1
+sgtz r0 r0
+and r2 r2 r0
+beqz r2 InitialExt
+move r0 1
+j ra
+InitialExt:
+move r0 2
+j ra
+
+EnsureQueueSeeded:
+jal GetListCount
+bnez r0 EnsureSeedDone
+jal GetInitialIdleState
+jal QueuePushState
+EnsureSeedDone:
+j ra
+
+CheckOverride:
+l r0 Override Setting
+beqz r0 OverrideOff
+beq state 3 OverrideDone
+jal ClearQueue
+move r0 3
+jal QueuePushState
+j OverrideDone
+OverrideOff:
+bne state 3 OverrideDone
+jal ClearQueue
+jal GetInitialIdleState
+jal QueuePushState
+OverrideDone:
+j ra
+
+QueueRouteForState:
+beq r0 1 RouteFromInterior
+beq r0 2 RouteFromExterior
+j ra
+RouteFromInterior:
+move r0 5
+jal QueuePushState
+move r0 7
+jal QueuePushState
+move r0 2
+jal QueuePushState
+j ra
+RouteFromExterior:
+move r0 4
+jal QueuePushState
+move r0 6
+jal QueuePushState
+move r0 1
+jal QueuePushState
+j ra
+
+MaybeAdvanceState:
+beq state 1 AdvanceIdle
+beq state 2 AdvanceIdle
+beq state 3 AdvanceDone
+beq state 4 AdvanceDepress
+beq state 5 AdvanceDepress
+beq state 6 AdvancePressurize
+beq state 7 AdvancePressurize
+j AdvanceReset
+
+AdvanceIdle:
+jal GetListCount
+bgt r0 1 AdvanceIdlePop
+j AdvanceDone
+AdvanceIdlePop:
+jal QueuePopHead
+j AdvanceDone
+
+AdvanceDepress:
+l r0 GasSen Pressure
+bgt r0 ExtKpa AdvanceDone
+jal QueuePopHead
+j AdvanceDone
+
+AdvancePressurize:
+l r0 GasSen Pressure
+mod r1 state 2
+select r2 r1 ExtKpa IntKpa
+blt r0 r2 AdvanceDone
+jal QueuePopHead
+j AdvanceDone
+
+AdvanceReset:
+jal ClearQueue
+jal GetInitialIdleState
+jal QueuePushState
+
+AdvanceDone:
+j ra
+
+SearchForPress:
+lbn r0 ButtH ButtN Setting Maximum
+sgtz r0 r0
+beq Door1H 1736080881 SearchSkip1
+lbn r1 Door1H Door1NH Open Maximum
+beqz r1 SearchDoor1Closed
+lbn r2 Door1H Door1NH Setting Minimum
+j SearchEndIf1
+SearchDoor1Closed:
+lbn r2 Door1H Door1NH Setting Maximum
+SearchEndIf1:
+sne r2 r2 r1
+sbn Door1H Door1NH Setting r1
+or r0 r0 r2
+SearchSkip1:
+beq Door2H 1736080881 SearchSkip2
+lbn r1 Door2H Door2NH Open Maximum
+beqz r1 SearchDoor2Closed
+lbn r2 Door2H Door2NH Setting Minimum
+j SearchEndIf2
+SearchDoor2Closed:
+lbn r2 Door2H Door2NH Setting Maximum
+SearchEndIf2:
+sne r2 r2 r1
+sbn Door2H Door2NH Setting r1
+or r0 r0 r2
+SearchSkip2:
+j ra

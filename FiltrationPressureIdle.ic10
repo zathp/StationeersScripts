@@ -1,0 +1,59 @@
+# Filtration pressure controller (single unit)
+# Place this IC in a filtration unit and adjust the constants below.
+# Behavior (no hysteresis):
+# - At/above target pressure: filtration idles.
+# - Below target: filtration runs with PWM duty based on pressure deficit.
+
+# kPa target to hold.
+define TargetPressure 4500
+
+# kPa deficit that maps to 100% duty cycle.
+define PressureBand 1500
+
+# PWM period in ticks.
+define PwmPeriod 20
+
+# Filtration mode values.
+define ModeIdle 0
+define ModeFilter 1
+
+# Persistent PWM counter.
+move r14 0
+
+MainLoop:
+# Read output pressure from this filtration device.
+l r0 db PressureOutput
+
+# Pressure deficit below target (kPa), clamped to >= 0.
+sub r1 TargetPressure r0
+max r1 r1 0
+
+# Duty fraction 0..1 from deficit / PressureBand.
+div r2 r1 PressureBand
+min r2 r2 1
+
+# Convert duty fraction to on-time ticks in current PWM period.
+mul r3 r2 PwmPeriod
+
+# Advance and wrap PWM counter.
+add r14 r14 1
+blt r14 PwmPeriod CounterOk
+move r14 0
+
+CounterOk:
+# Default idle. If pressure is above target (deficit 0), stay idle.
+move r15 ModeIdle
+blez r1 ApplyMode
+
+# Run filtration only during PWM on-window.
+blt r14 r3 SetFilter
+j ApplyMode
+
+SetFilter:
+move r15 ModeFilter
+
+ApplyMode:
+s db Mode r15
+
+yield
+j MainLoop

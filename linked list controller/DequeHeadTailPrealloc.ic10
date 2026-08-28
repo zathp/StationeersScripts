@@ -1,0 +1,92 @@
+# Deque controller/state chip for 3-chip setup.
+# d0 = add worker chip, d1 = delete worker chip.
+# Shared state and buffer live on this chip.
+# Command slots are near stack end:
+# CMD_SLOT(511): 1 add head, 2 add tail, 3 del head, 4 del tail.
+# ARG_SLOT(510): value for add commands.
+# STATUS_SLOT(504): 1 ok, -1 empty, -2 full, -3 bad cmd.
+# RESULT_SLOT(509): echo (add) or removed value (delete).
+
+alias ADDW d0
+alias DELW d1
+
+define MAGIC 64222
+define WORKER_SLOT 503
+define STATUS_SLOT 504
+define INIT_SLOT 505
+define COUNT_SLOT 506
+define TAIL_SLOT 507
+define HEAD_SLOT 508
+define RESULT_SLOT 509
+define ARG_SLOT 510
+define CMD_SLOT 511
+
+define BUFFER_START 32
+define BUFFER_CAP 448
+
+Main:
+get r0 db INIT_SLOT
+beq r0 MAGIC Ready
+jal Init
+Ready:
+get r0 db WORKER_SLOT
+bnez r0 Poll
+l r0 db Setting
+beqz r0 MainYield
+jal Dispatch
+MainYield:
+yield
+j Main
+
+Init:
+move r0 MAGIC
+put db INIT_SLOT r0
+move r0 0
+put db WORKER_SLOT r0
+put db STATUS_SLOT r0
+put db RESULT_SLOT r0
+put db CMD_SLOT r0
+put db ARG_SLOT r0
+put db COUNT_SLOT r0
+put db HEAD_SLOT r0
+put db TAIL_SLOT r0
+s db Setting 0
+j ra
+
+Dispatch:
+get r1 db CMD_SLOT
+beq r1 1 SendAdd
+beq r1 2 SendAdd
+beq r1 3 SendDel
+beq r1 4 SendDel
+move r0 -3
+put db STATUS_SLOT r0
+s db Setting 0
+j ra
+SendAdd:
+s ADDW Setting 1
+move r0 1
+put db WORKER_SLOT r0
+s db Setting 0
+j ra
+SendDel:
+s DELW Setting 1
+move r0 2
+put db WORKER_SLOT r0
+s db Setting 0
+j ra
+
+Poll:
+get r0 db WORKER_SLOT
+beq r0 1 PollAdd
+l r1 DELW Setting
+bnez r1 MainYield
+j PollDone
+PollAdd:
+l r1 ADDW Setting
+bnez r1 MainYield
+PollDone:
+move r0 0
+put db WORKER_SLOT r0
+put db CMD_SLOT r0
+j MainYield

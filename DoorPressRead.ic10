@@ -1,0 +1,10 @@
+alias door d0
+
+s door Mode 1 # Logic mode
+loop:
+l r1 door Open
+l r0 door Setting
+sne r0 r0 r1 # is button pressed?
+s door Setting r0 # debounce
+yield
+j loop

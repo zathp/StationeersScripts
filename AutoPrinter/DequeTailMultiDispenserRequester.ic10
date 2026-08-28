@@ -1,0 +1,123 @@
+# Queue dispatcher for receiver + multi-dispenser queueing.
+# The receiver writes requests to this chip's local slots 500/501.
+# This chip is the only writer to the queue controller command slot.
+# Fill slots 480..494 with dispenser device IDs (ReferenceId).
+define QueueDeviceId $00000
+define STATUS_SLOT 504
+define RESULT_SLOT 509
+define ARG_SLOT 510
+define CMD_SLOT 511
+define CMD_ADD_TAIL 2
+define CMD_DEL_TAIL 4
+define DISP_ARG_SLOT 510
+define DISP_CMD_SLOT 511
+define DISP_CMD_REQUEST 1
+define DISP_ID_SLOT_START 480
+define DISP_COUNT 15
+define INPUT_ARG_SLOT 500
+define INPUT_CMD_SLOT 501
+define BUSY_SLOT 503
+define S_IDLE 0
+define S_WAIT_POP 1
+define S_WAIT_DISP 2
+alias t r0
+alias phase r1
+alias req r2
+alias idx r3
+alias queueId r4
+alias dispId r5
+move queueId QueueDeviceId
+move phase S_IDLE
+move req 0
+move idx 0
+Loop:
+jal HandleInput
+beq phase S_IDLE PopRequest
+beq phase S_WAIT_POP PopWait
+j DispWait
+PopRequest:
+get t queueId CMD_SLOT
+bnez t Tick
+l t queueId Setting
+bnez t Tick
+move t CMD_DEL_TAIL
+put queueId CMD_SLOT t
+s queueId Setting 1
+move phase S_WAIT_POP
+j Tick
+PopWait:
+get t queueId CMD_SLOT
+bnez t Tick
+l t queueId Setting
+bnez t Tick
+get t queueId STATUS_SLOT
+beq t 1 PopOk
+move phase S_IDLE
+j Tick
+PopOk:
+get req queueId RESULT_SLOT
+move idx 0
+jal Trigger
+move phase S_WAIT_DISP
+j Tick
+DispWait:
+jal LoadDispId
+l t dispId Setting
+beqz t DispSuccess
+bltz t DispFail
+j Tick
+DispSuccess:
+move phase S_IDLE
+j Tick
+DispFail:
+s dispId Setting 0
+add idx idx 1
+blt idx DISP_COUNT NextDisp
+jal QueueAdd
+move phase S_IDLE
+j Tick
+NextDisp:
+jal Trigger
+j Tick
+HandleInput:
+get t db INPUT_CMD_SLOT
+beqz t ra
+get req db INPUT_ARG_SLOT
+put db INPUT_CMD_SLOT 0
+put db INPUT_ARG_SLOT 0
+move t 1
+put db BUSY_SLOT t
+jal QueueAdd
+move t 0
+put db BUSY_SLOT t
+j ra
+QueueAdd:
+get t queueId CMD_SLOT
+bnez t ra
+l t queueId Setting
+bnez t ra
+put queueId ARG_SLOT req
+move t CMD_ADD_TAIL
+put queueId CMD_SLOT t
+s queueId Setting 1
+QueueWait:
+get t queueId CMD_SLOT
+bnez t QueueWait
+l t queueId Setting
+bnez t QueueWait
+get t queueId STATUS_SLOT
+beq t 1 ra
+j QueueWait
+LoadDispId:
+add t idx DISP_ID_SLOT_START
+get dispId db t
+j ra
+Trigger:
+jal LoadDispId
+put dispId DISP_ARG_SLOT req
+put dispId DISP_CMD_SLOT DISP_CMD_REQUEST
+s dispId Setting 1
+j ra
+Tick:
+yield
+j Loop

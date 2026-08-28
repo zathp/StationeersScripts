@@ -1,0 +1,101 @@
+alias ThrustCmd d0
+alias TurboPump d1
+alias ThrottleCmd d2
+alias PipeAnalyser d3
+alias PressurantValve d5
+
+# Match this with the value used by RocketConCountdown.ic10.
+define MaxThrustN 0
+
+# Max feed pressure setpoint (kPa) at 100% demand and 100% throttle.
+define MaxFeedPressure 3000
+
+# PID gains for pipe pressure control.
+define Kp 0.8
+define Ki 0.15
+define Kd 0.05
+define TickSeconds 0.5
+define IntegralClamp 250
+define IntegralClampMin -250
+
+# Persistent PID state.
+move r11 0     # integral accumulator
+move r12 0     # previous error
+
+MainLoop:
+# Read desired thrust in Newtons from a memory/network writer.
+l r0 ThrustCmd Setting
+max r0 r0 0
+
+# Read external throttle command in percent (0..100).
+l r1 ThrottleCmd Setting
+max r1 r1 0
+min r1 r1 100
+
+# Demand scale in [0..1]. If MaxThrustN is unset, fall back to binary demand.
+ble MaxThrustN 0 UseBinaryDemand
+div r14 r0 MaxThrustN
+max r14 r14 0
+min r14 r14 1
+j HaveDemandScale
+
+UseBinaryDemand:
+sgtz r14 r0
+
+HaveDemandScale:
+# Target feed pressure (kPa) = demandScale * throttleScale * MaxFeedPressure.
+div r2 r1 100
+mul r3 r14 r2
+mul r3 r3 MaxFeedPressure
+
+# If no requested output, hard-off and clear PID state.
+blez r3 PumpOff
+
+# Feedback: current feed pressure from a Pipe Analyser.
+l r4 PipeAnalyser Pressure
+
+# error = target - current
+sub r5 r3 r4
+
+# integral += error * dt (anti-windup clamp)
+mul r15 r5 TickSeconds
+add r11 r11 r15
+min r11 r11 IntegralClamp
+max r11 r11 IntegralClampMin
+
+# derivative = (error - prevError) / dt
+sub r8 r5 r12
+div r8 r8 TickSeconds
+
+# PID output as a pump setting command (0..100).
+mul r6 Kp r5
+mul r7 Ki r11
+mul r8 Kd r8
+add r9 r6 r7
+add r9 r9 r8
+
+# Clamp actuator command to valid range and apply.
+max r9 r9 0
+min r9 r9 100
+
+s TurboPump On 1
+s TurboPump Setting r9
+s PressurantValve On 1
+s PressurantValve Setting r9
+
+# Save state for next iteration.
+move r12 r5
+
+yield
+j MainLoop
+
+PumpOff:
+s TurboPump On 0
+s TurboPump Setting 0
+s PressurantValve On 0
+s PressurantValve Setting 0
+move r11 0
+move r12 0
+
+yield
+j MainLoop

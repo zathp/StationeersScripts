@@ -1,0 +1,97 @@
+alias EvapChamber d0
+alias OutputPipe d1
+define EvapH HASH("StructureEvaporationChamber")
+define TargetTemp 222
+define FreezeGuardTemp 273.15
+define Kp 1.2
+define Ki 0.08
+define Kd 0.25
+define TickSeconds 0.5
+define StartupSetting 1
+define IdleSetting 2000
+define FreezeGuardSetting 1600
+define SettingMin 1
+define SettingMax 2000
+define IntegralClamp 2000
+define IntegralClampMin 1
+define DeadbandK 0.03
+define CompleteBandK 0.05
+define CompleteTicks 6
+define StateRun 1
+define StateDone 2
+move r10 0
+move r11 0
+move r12 0
+move r14 StateRun
+move r15 StartupSetting
+l r13 EvapChamber NameHash
+sbn EvapH r13 Setting StartupSetting
+s db Setting StartupSetting
+MainLoop:
+lbn r1 EvapH r13 Temperature Maximum
+l r0 OutputPipe Temperature
+ble r0 FreezeGuardTemp FreezeProtect
+beq r14 StateRun StateRunLoop
+beq r14 StateDone StateDoneLoop
+move r14 StateRun
+j StateRunLoop
+StateRunLoop:
+sub r4 TargetTemp r1
+abs r5 r4
+ble r5 DeadbandK Hold
+mul r6 r4 TickSeconds
+add r10 r10 r6
+min r10 r10 IntegralClamp
+max r10 r10 IntegralClampMin
+sub r7 r4 r11
+div r7 r7 TickSeconds
+mul r8 Kp r4
+mul r9 Ki r10
+add r8 r8 r9
+mul r9 Kd r7
+add r8 r8 r9
+add r6 r15 r8
+max r6 r6 SettingMin
+min r6 r6 SettingMax
+sbn EvapH r13 Setting r6
+s db Setting r6
+move r15 r6
+move r11 r4
+j CheckComplete
+Hold:
+sbn EvapH r13 Setting r15
+s db Setting r15
+move r11 r4
+CheckComplete:
+add r6 TargetTemp CompleteBandK
+ble r1 r6 MarkComplete
+move r12 0
+j EndLoop
+MarkComplete:
+add r12 r12 1
+blt r12 CompleteTicks EndLoop
+move r14 StateDone
+sbn EvapH r13 Setting IdleSetting
+s db Setting IdleSetting
+move r15 IdleSetting
+j EndLoop
+StateDoneLoop:
+move r14 StateRun
+move r10 0
+move r11 0
+move r12 0
+sbn EvapH r13 Setting StartupSetting
+s db Setting StartupSetting
+move r15 StartupSetting
+j EndLoop
+
+FreezeProtect:
+sbn EvapH r13 Setting FreezeGuardSetting
+s db Setting FreezeGuardSetting
+move r15 FreezeGuardSetting
+move r10 0
+move r11 0
+move r12 0
+EndLoop:
+yield
+j MainLoop

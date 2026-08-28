@@ -1,0 +1,128 @@
+# Autolathe stack instruction loader.
+# A high Printer Activate signal loads the recipe currently selected on the autolathe.
+# The requested production quantity is read from the stacker.
+# Status is reported in slot 508: 1 queued, -1 invalid quantity.
+# Local map: slots 400..431 contain 16 [reagent hash, silo number] pairs.
+# Slot 432 is the active-pair count. Slots 433..441 remember missing records.
+# Requests are sent to ROUTER_DEVICE_ID; silo 0 is a valid map result.
+# The router receives only a silo number. Quantities belong to a later dispenser
+# or passage-verification controller, if one is added.
+# The shared PrinterImportGate.ic10 clears this request latch on item arrival.
+# Program iron as: put db 400 HASH("ItemIronIngot"); put db 401 0;
+# then set the active pair count: put db 432 1.
+
+alias Printer d0
+alias Stacker d1
+alias Button d2
+
+define STACK_POINTER_SLOT 63
+define WAIT_ADDRESS 0
+define EXECUTE_ADDRESS 1
+define STATUS_SLOT 508
+
+define MAP_START 400
+define MAP_COUNT_SLOT 432
+define MISSING_STATE_START 433
+define MISSING_START 54
+define MISSING_END 62
+define WAITING_FOR_IMPORT_SLOT 442
+
+define ROUTER_DEVICE_ID $00000
+define ROUTER_SILO_SLOT 510
+define ROUTER_CMD_SLOT 511
+define ROUTER_CMD_REQUEST 1
+define NO_SILO -1
+
+define OP_EXECUTE_RECIPE 2
+define OP_WAIT_UNTIL_VALID 3
+define MAX_QUANTITY 255
+
+Main:
+get r0 db WAITING_FOR_IMPORT_SLOT
+bnez r0 Poll
+jal ScanMissing
+l r0 Printer Activate
+beqz r0 Poll
+
+l r1 Stacker Quantity
+beqz r1 InvalidQuantity
+bgt r1 MAX_QUANTITY InvalidQuantity
+ l r2 Printer RecipeHash
+
+# Write WaitUntilNextValid into the executable stack range 0..53.
+move r0 OP_WAIT_UNTIL_VALID
+put Printer WAIT_ADDRESS r0
+
+# Pack ExecuteRecipe: opcode [0..7], quantity [8..15], hash [16..47].
+move r0 OP_EXECUTE_RECIPE
+sll r0 r0 8
+or r0 r0 r1
+sll r0 r0 16
+and r2 r2 $ffffffff
+or r0 r0 r2
+put Printer EXECUTE_ADDRESS r0
+
+# Opcode 1 at address 63 sets the stack pointer to index 0.
+put Printer STACK_POINTER_SLOT 1
+
+put db STATUS_SLOT 1
+s Printer Activate 0
+j Poll
+
+InvalidQuantity:
+move r0 -1
+put db STATUS_SLOT r0
+s Printer Activate 0
+
+ScanMissing:
+move r14 0
+ScanMissingLoop:
+add r1 r14 MISSING_START
+get r0 Printer r1
+add r2 r14 MISSING_STATE_START
+get r3 db r2
+beq r0 r3 NextMissing
+move r13 r0
+and r4 r0 $ff
+beq r4 9 MissingReagent
+NextMissing:
+add r14 r14 1
+blt r14 9 ScanMissingLoop
+ScanMissingDone:
+j ra
+
+MissingReagent:
+srl r5 r0 16
+jal FindSilo
+beq r0 NO_SILO NextMissing
+put ROUTER_DEVICE_ID ROUTER_SILO_SLOT r0
+put ROUTER_DEVICE_ID ROUTER_CMD_SLOT ROUTER_CMD_REQUEST
+move r0 1
+put db WAITING_FOR_IMPORT_SLOT r0
+put db r2 r13
+j NextMissing
+
+FindSilo:
+get r1 db MAP_COUNT_SLOT
+move r2 0
+FindSiloLoop:
+bge r2 r1 NoSilo
+mul r3 r2 2
+add r3 r3 MAP_START
+get r6 db r3
+beq r6 r5 FoundSilo
+add r3 r3 1
+get r0 db r3
+add r2 r2 1
+j FindSiloLoop
+FoundSilo:
+add r3 r3 1
+get r0 db r3
+j ra
+NoSilo:
+move r0 NO_SILO
+j ra
+
+Poll:
+yield
+j Main

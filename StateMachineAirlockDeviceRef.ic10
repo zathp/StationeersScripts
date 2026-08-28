@@ -1,0 +1,99 @@
+#Internal Defines
+define IntKpa 0
+alias VentInt d0
+#External Defines
+define ExtKpa 0
+alias VentExt d1
+
+alias GasSen d2
+alias Door1 d3
+alias Door2 d4
+define ButtH HASH("StructureLogicSwitch")
+define ButtN HASH("Cycle")
+#states 1 and 2 doors open
+alias state r8
+alias lastPress r9
+startup:
+move lastPress 0
+s Door1 Mode 1
+s Door2 Mode 1
+s Door1 Lock 0
+s Door2 Lock 0
+l r0 Door1 Open
+l r1 Door2 Open
+sgtz r1 r1
+xor r2 1 r1
+sgtz r0 r0
+and r2 r2 r0
+beqz r2 else
+s Door1 Open 1
+move state 1
+j endif
+else:
+s Door1 Open 0
+s Door2 Open 1
+move state 2
+endif:
+yield
+start:
+lbn r0 ButtH ButtN Setting Maximum #lever press, no door Setting reads
+beqz r0 skipreset
+sbn ButtH ButtN Open 0 #lever self-resets once read on
+skipreset:
+not r1 lastPress
+and r1 r1 r0
+move lastPress r0 #debounce
+jal stateMachine
+yield
+j start
+stateMachine:
+bge state 8 startup
+bge state 4 running
+s VentInt On 0
+s VentExt On 0
+mod r0 state 2
+s Door1 Open r0
+s Door1 Lock 0
+sub r0 1 r0
+s Door2 Open r0
+s Door2 Lock 0
+# if button pressed (r1), start cycle
+beqz r1 endstateMachine
+s Door1 Open 0
+s Door2 Open 0
+and r0 state 1
+or state 4 r0
+j endstateMachine
+running:
+mod r0 state 2           # ones bit: 1=interior, 0=exterior
+sub r1 1 r0              # complement: 0=interior, 1=exterior
+bge state 6 pressurize
+l r2 GasSen Pressure
+s VentInt Mode 1         # Siphon
+s VentExt Mode 1         # Siphon
+s VentInt On r0
+s VentExt On r1
+bgt r2 ExtKpa endstateMachine
+s VentInt On 0
+s VentExt On 0
+add state state 2
+j endstateMachine
+pressurize:
+l r2 GasSen Pressure
+s VentInt Mode 0         # Infuse
+s VentExt Mode 0         # Infuse
+s VentExt On r0
+s VentInt On r1
+select r3 r0 ExtKpa IntKpa  # ones=1(interior)->ExtKpa, ones=0(exterior)->IntKpa
+blt r2 r3 endstateMachine
+s VentExt On 0
+s VentInt On 0
+bnez r0 openExtDoor
+s Door1 Open 1  # state 6: came from exterior, open interior door
+move state 1
+j endstateMachine
+openExtDoor:
+s Door2 Open 1  # state 7: came from interior, open exterior door
+move state 2
+endstateMachine:
+j ra #EndFunc

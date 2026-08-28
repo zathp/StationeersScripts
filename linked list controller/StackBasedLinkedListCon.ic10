@@ -1,0 +1,762 @@
+alias Cmd d0
+alias Sub1 d1
+alias Sub2 d2
+alias Sub3 d3
+alias Sub4 d4
+alias Sub5 d5
+alias Sub6 d6
+
+define MAGIC 27527
+define INIT_SLOT 0
+define LIST_HEAD_SLOT 1
+define LIST_TAIL_SLOT 2
+define FREE_HEAD_SLOT 3
+define LIST_COUNT_SLOT 4
+define NODE_BASE_SLOT 5
+define NODE_SIZE_SLOT 6
+define NODE_CAP_SLOT 7
+
+define NODE_BASE 32
+define NODE_SIZE 1
+define NODE_CAP 112
+
+define CMD_SLOT 511
+define CMD_COUNT 510
+define CMD_DATA_START 509
+define CMD_DATA_END 480
+
+define CMD_FLAG_DELETE $b100000000000
+define CMD_FLAG_ADD $b001000000000
+define CMD_FLAG_WRITE $b010000000000
+define CMD_FLAG_ALT $b000100000000
+
+Main:
+get r0 db INIT_SLOT
+beq r0 MAGIC MainReady
+jal InitList
+MainReady:
+l r0 Cmd Setting
+beqz r0 MainYield
+jal ProcessCommand
+jal ClearCommandBuffer
+s Cmd Setting 0
+beqz r0 MainYield
+jal SignalSubscribers
+MainYield:
+yield
+j Main
+
+InitList:
+push ra
+move r0 MAGIC
+put db INIT_SLOT r0
+move r0 -1
+put db LIST_HEAD_SLOT r0
+put db LIST_TAIL_SLOT r0
+move r0 0
+put db FREE_HEAD_SLOT r0
+put db LIST_COUNT_SLOT r0
+move r0 NODE_BASE
+put db NODE_BASE_SLOT r0
+move r0 NODE_SIZE
+put db NODE_SIZE_SLOT r0
+move r0 NODE_CAP
+put db NODE_CAP_SLOT r0
+move r1 0
+InitFreeLoop:
+bge r1 NODE_CAP InitFreeDone
+mul r2 r1 NODE_SIZE
+add r2 r2 NODE_BASE
+move r3 0
+put db r2 r3
+add r3 r2 1
+move r4 -1
+put db r3 r4
+add r3 r2 2
+add r4 r1 1
+blt r4 NODE_CAP InitHasNext
+move r4 -1
+InitHasNext:
+put db r3 r4
+add r3 r2 3
+move r4 0
+put db r3 r4
+add r1 r1 1
+j InitFreeLoop
+InitFreeDone:
+pop ra
+j ra
+
+ProcessCommand:
+push ra
+push r1
+push r2
+push r3
+push r4
+move r4 0
+get r0 Cmd CMD_SLOT
+beqz r0 ProcessDone
+l r3 Cmd CMD_COUNT
+bnez r3 CountReady
+move r3 1
+CountReady:
+and r1 r0 CMD_FLAG_DELETE
+bnez r1 DoDelete
+and r1 r0 CMD_FLAG_ADD
+bnez r1 DoAdd
+and r1 r0 CMD_FLAG_WRITE
+bnez r1 DoWrite
+j ProcessDone
+DoDelete:
+and r0 r0 $ff
+jal DeleteAtPosition
+move r4 r0
+j ProcessDone
+DoAdd:
+and r2 r0 CMD_FLAG_ALT
+and r1 r0 $ff
+beqz r2 AddAfterCall
+move r0 r1
+move r1 r3
+jal AddBeforeAtPosition
+move r4 r0
+j ProcessDone
+AddAfterCall:
+move r0 r1
+move r1 r3
+jal AddAfterAtPosition
+move r4 r0
+j ProcessDone
+DoWrite:
+and r2 r0 CMD_FLAG_ALT
+and r1 r0 $ff
+beqz r2 WriteEndCall
+move r0 r1
+move r1 r3
+jal WriteAtPosition
+move r4 r0
+j ProcessDone
+WriteEndCall:
+move r0 r3
+jal WriteAtEnd
+move r4 r0
+ProcessDone:
+move r0 r4
+pop r4
+pop r3
+pop r2
+pop r1
+pop ra
+j ra
+
+ClearCommandBuffer:
+push r0
+move r0 CMD_SLOT
+ClearCommandLoop:
+put Cmd r0 0
+beq r0 CMD_DATA_END ClearCommandDone
+sub r0 r0 1
+j ClearCommandLoop
+ClearCommandDone:
+pop r0
+j ra
+
+SignalSubscribers:
+s Sub1 Setting 1
+s Sub2 Setting 1
+s Sub3 Setting 1
+s Sub4 Setting 1
+s Sub5 Setting 1
+s Sub6 Setting 1
+j ra
+
+FetchPayload:
+sub r2 CMD_DATA_START r0
+get r1 Cmd r2
+j ra
+
+NodeAddr:
+mul r1 r0 NODE_SIZE
+add r0 r1 NODE_BASE
+j ra
+
+AllocNode:
+push ra
+push r1
+push r2
+push r3
+push r4
+push r5
+l r1 db FREE_HEAD_SLOT
+bltz r1 AllocFail
+move r4 r1
+move r0 r1
+jal NodeAddr
+move r2 r0
+add r3 r2 2
+get r5 db r3
+move r1 1
+put db r2 r1
+add r3 r2 1
+move r1 -1
+put db r3 r1
+add r3 r2 2
+put db r3 r1
+add r3 r2 3
+move r1 0
+put db r3 r1
+put db FREE_HEAD_SLOT r5
+move r0 r4
+j AllocDone
+AllocFail:
+move r0 -1
+AllocDone:
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop ra
+j ra
+
+FreeNode:
+push ra
+push r1
+push r2
+push r3
+push r4
+push r5
+move r1 r0
+move r4 r1
+jal NodeAddr
+move r2 r0
+move r3 0
+put db r2 r3
+add r3 r2 1
+move r5 -1
+put db r3 r5
+add r3 r2 2
+get r5 db FREE_HEAD_SLOT
+put db r3 r5
+add r3 r2 3
+move r5 0
+put db r3 r5
+put db FREE_HEAD_SLOT r4
+move r0 1
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop ra
+j ra
+
+SetNodeValue:
+push ra
+push r2
+push r3
+move r3 r1
+jal NodeAddr
+add r2 r0 3
+put db r2 r3
+move r0 1
+pop r3
+pop r2
+pop ra
+j ra
+
+FindNodeAtPosition:
+push ra
+push r1
+push r2
+push r3
+push r4
+push r5
+push r6
+l r1 db LIST_COUNT_SLOT
+bltz r0 FindFail
+bge r0 r1 FindFail
+beqz r1 FindFail
+div r2 r1 2
+blt r0 r2 FindFromHead
+l r3 db LIST_TAIL_SLOT
+move r4 r1
+sub r4 r4 1
+move r5 r3
+FindFromTailLoop:
+beq r4 r0 FindFound
+move r6 r5
+jal NodeAddr
+add r6 r0 1
+get r5 db r6
+sub r4 r4 1
+j FindFromTailLoop
+FindFromHead:
+l r5 db LIST_HEAD_SLOT
+move r4 0
+FindFromHeadLoop:
+beq r4 r0 FindFound
+move r6 r5
+jal NodeAddr
+add r6 r0 2
+get r5 db r6
+add r4 r4 1
+j FindFromHeadLoop
+FindFound:
+move r0 r5
+j FindExit
+FindFail:
+move r0 -1
+FindExit:
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop ra
+j ra
+
+LinkAfter:
+push ra
+push r2
+push r3
+push r4
+push r5
+push r6
+move r2 r0
+move r3 r1
+move r0 r2
+jal NodeAddr
+move r4 r0
+add r5 r4 2
+get r6 db r5
+move r0 r3
+jal NodeAddr
+move r5 r0
+move r0 1
+put db r5 r0
+add r0 r5 1
+put db r0 r2
+add r0 r5 2
+put db r0 r6
+add r0 r4 2
+put db r0 r3
+beq r6 -1 LinkAfterTail
+move r0 r6
+jal NodeAddr
+add r0 r0 1
+put db r0 r3
+j LinkAfterDone
+LinkAfterTail:
+put db LIST_TAIL_SLOT r3
+LinkAfterDone:
+move r0 1
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+LinkBefore:
+push ra
+push r2
+push r3
+push r4
+push r5
+push r6
+move r2 r0
+move r3 r1
+move r0 r2
+jal NodeAddr
+move r4 r0
+add r5 r4 1
+get r6 db r5
+move r0 r3
+jal NodeAddr
+move r5 r0
+move r0 1
+put db r5 r0
+add r0 r5 1
+put db r0 r6
+add r0 r5 2
+put db r0 r2
+add r0 r4 1
+put db r0 r3
+beq r6 -1 LinkBeforeHead
+move r0 r6
+jal NodeAddr
+add r0 r0 2
+put db r0 r3
+j LinkBeforeDone
+LinkBeforeHead:
+put db LIST_HEAD_SLOT r3
+LinkBeforeDone:
+move r0 1
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+InsertNewAfter:
+push ra
+push r2
+push r3
+push r4
+push r5
+move r2 r0
+move r4 r1
+jal AllocNode
+bltz r0 InsertNewAfterFail
+move r3 r0
+move r0 r3
+move r1 r4
+jal SetNodeValue
+move r0 r2
+move r1 r3
+jal LinkAfter
+move r0 r3
+j InsertNewAfterDone
+InsertNewAfterFail:
+move r0 -1
+InsertNewAfterDone:
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+InsertNewBefore:
+push ra
+push r2
+push r3
+push r4
+push r5
+move r2 r0
+move r4 r1
+jal AllocNode
+bltz r0 InsertNewBeforeFail
+move r3 r0
+move r0 r3
+move r1 r4
+jal SetNodeValue
+move r0 r2
+move r1 r3
+jal LinkBefore
+move r0 r3
+j InsertNewBeforeDone
+InsertNewBeforeFail:
+move r0 -1
+InsertNewBeforeDone:
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+AppendValue:
+push ra
+push r2
+push r3
+push r4
+push r5
+move r4 r1
+l r2 db LIST_COUNT_SLOT
+beqz r2 AppendFirstValue
+l r0 db LIST_TAIL_SLOT
+move r1 r4
+jal InsertNewAfter
+bltz r0 AppendFail
+l r2 db LIST_COUNT_SLOT
+add r2 r2 1
+put db LIST_COUNT_SLOT r2
+move r0 1
+j AppendDone
+AppendFirstValue:
+jal AllocNode
+bltz r0 AppendFail
+move r3 r0
+move r0 r3
+move r1 r4
+jal SetNodeValue
+move r0 r3
+jal NodeAddr
+move r5 r0
+move r0 1
+put db r5 r0
+add r0 r5 1
+move r1 -1
+put db r0 r1
+add r0 r5 2
+put db r0 r1
+add r0 r5 3
+put db r0 r4
+put db LIST_HEAD_SLOT r3
+put db LIST_TAIL_SLOT r3
+put db LIST_COUNT_SLOT 1
+move r0 1
+j AppendDone
+AppendFail:
+move r0 0
+AppendDone:
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+WriteAtEnd:
+push ra
+push r2
+push r3
+push r4
+push r5
+push r6
+move r5 r1
+beqz r5 WriteAtEndFail
+move r4 0
+WriteAtEndLoop:
+bge r4 r5 WriteAtEndDone
+move r0 r4
+jal FetchPayload
+move r1 r1
+jal AppendValue
+beqz r0 WriteAtEndFail
+add r4 r4 1
+j WriteAtEndLoop
+WriteAtEndDone:
+move r0 1
+j WriteAtEndExit
+WriteAtEndFail:
+move r0 0
+WriteAtEndExit:
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+WriteAtPosition:
+push ra
+push r2
+push r3
+push r4
+push r5
+push r6
+move r5 r0
+move r4 r1
+beqz r4 WriteAtPositionFail
+move r0 r5
+jal FindNodeAtPosition
+bltz r0 WriteAtPositionFail
+move r2 r0
+move r3 0
+WriteAtPositionLoop:
+bge r3 r4 WriteAtPositionDone
+move r0 r3
+jal FetchPayload
+move r1 r1
+move r0 r2
+move r1 r1
+jal SetNodeValue
+move r0 r2
+jal NodeAddr
+add r0 r0 2
+get r2 db r0
+bltz r2 WriteAtPositionDone
+add r3 r3 1
+j WriteAtPositionLoop
+WriteAtPositionDone:
+move r0 1
+j WriteAtPositionExit
+WriteAtPositionFail:
+move r0 0
+WriteAtPositionExit:
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+AddAfterAtPosition:
+push ra
+push r2
+push r3
+push r4
+push r5
+push r6
+move r5 r0
+move r4 r1
+beqz r4 AddAfterFail
+l r6 db LIST_COUNT_SLOT
+beqz r6 AddAfterEmpty
+move r0 r5
+jal FindNodeAtPosition
+bltz r0 AddAfterFail
+move r2 r0
+move r3 0
+AddAfterLoop:
+bge r3 r4 AddAfterDone
+move r0 r3
+jal FetchPayload
+move r1 r1
+move r0 r2
+move r1 r1
+jal InsertNewAfter
+bltz r0 AddAfterFail
+move r2 r0
+l r6 db LIST_COUNT_SLOT
+add r6 r6 1
+put db LIST_COUNT_SLOT r6
+add r3 r3 1
+j AddAfterLoop
+AddAfterEmpty:
+move r3 0
+AddAfterEmptyLoop:
+bge r3 r4 AddAfterDone
+move r0 r3
+jal FetchPayload
+move r1 r1
+jal AppendValue
+beqz r0 AddAfterFail
+add r3 r3 1
+j AddAfterEmptyLoop
+AddAfterDone:
+move r0 1
+j AddAfterExit
+AddAfterFail:
+move r0 0
+AddAfterExit:
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+AddBeforeAtPosition:
+push ra
+push r2
+push r3
+push r4
+push r5
+push r6
+move r5 r0
+move r4 r1
+beqz r4 AddBeforeFail
+l r6 db LIST_COUNT_SLOT
+beqz r6 AddBeforeEmpty
+move r0 r5
+jal FindNodeAtPosition
+bltz r0 AddBeforeFail
+move r2 r0
+sub r3 r4 1
+AddBeforeLoop:
+bltz r3 AddBeforeDone
+move r0 r3
+jal FetchPayload
+move r1 r1
+move r0 r2
+move r1 r1
+jal InsertNewBefore
+bltz r0 AddBeforeFail
+move r2 r0
+l r6 db LIST_COUNT_SLOT
+add r6 r6 1
+put db LIST_COUNT_SLOT r6
+sub r3 r3 1
+j AddBeforeLoop
+AddBeforeEmpty:
+sub r3 r4 1
+AddBeforeEmptyLoop:
+bltz r3 AddBeforeDone
+move r0 r3
+jal FetchPayload
+move r1 r1
+jal AppendValue
+beqz r0 AddBeforeFail
+sub r3 r3 1
+j AddBeforeEmptyLoop
+AddBeforeDone:
+move r0 1
+j AddBeforeExit
+AddBeforeFail:
+move r0 0
+AddBeforeExit:
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop ra
+j ra
+
+DeleteAtPosition:
+push ra
+push r1
+push r2
+push r3
+push r4
+push r5
+push r6
+move r5 r0
+move r0 r5
+jal FindNodeAtPosition
+bltz r0 DeleteFail
+move r2 r0
+move r0 r2
+jal NodeAddr
+move r3 r0
+add r4 r3 1
+get r5 db r4
+add r4 r3 2
+get r6 db r4
+beq r5 -1 DeleteHeadFix
+move r0 r5
+jal NodeAddr
+add r0 r0 2
+put db r0 r6
+j DeletePrevDone
+DeleteHeadFix:
+put db LIST_HEAD_SLOT r6
+DeletePrevDone:
+beq r6 -1 DeleteTailFix
+move r0 r6
+jal NodeAddr
+add r0 r0 1
+put db r0 r5
+j DeleteLinkDone
+DeleteTailFix:
+put db LIST_TAIL_SLOT r5
+DeleteLinkDone:
+move r0 r2
+jal FreeNode
+l r0 db LIST_COUNT_SLOT
+sub r0 r0 1
+put db LIST_COUNT_SLOT r0
+move r0 1
+j DeleteDone
+DeleteFail:
+move r0 0
+DeleteDone:
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop ra
+j ra

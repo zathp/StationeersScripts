@@ -1,0 +1,74 @@
+define NumFiltration 8
+define FiltrationPrefab HASH("StructureFiltration")
+define OutPumpPrefab HASH("StructureVolumePump")
+define WastePumpPrefab HASH("StructureTurboVolumePump")
+define MinPress 1000
+push LogicType.RatioCarbonDioxideInput
+push LogicType.RatioHydrogenInput
+push LogicType.RatioMethaneInput
+push LogicType.RatioNitrogenInput
+push LogicType.RatioNitrousOxideInput
+push LogicType.RatioOxygenInput
+push LogicType.RatioPollutantInput
+push LogicType.RatioSteamInput
+push HASH("CO2")
+push HASH("H2")
+push HASH("CH4")
+push HASH("N2")
+push HASH("N2O")
+push HASH("O2")
+push HASH("POL")
+push HASH("H2O")
+alias maxPct r8
+loop:
+move maxPct 0
+move r7 1
+MaxLoop:
+bge r7 8 EndMaxLoop
+move r0 r7
+move sp r0
+peek r0
+move r1 r7
+add r1 r1 NumFiltration
+move sp r1
+peek r11
+lbn r1 FiltrationPrefab r11 r0 Average
+max maxPct maxPct r1
+add r7 r7 1
+j MaxLoop
+EndMaxLoop:
+s db Setting maxPct
+move r9 1
+FiltrationLoop:
+bgt r9 NumFiltration EndFiltrationLoop
+move r10 7
+add r10 r10 r9
+move r0 r9
+move sp r0
+peek r0
+move r1 r9
+add r1 r1 NumFiltration
+move sp r1
+peek r11
+lbn r2 FiltrationPrefab r11 r0 Average
+move r3 r9
+sub r3 r3 1
+bge r3 6 SkipDebugDR
+s dr3 Setting r2
+SkipDebugDR:
+sap r0 r2 maxPct 0.03125
+lbn r2 FiltrationPrefab r11 PressureInput Average
+sge r2 r2 MinPress
+and r0 r0 r2
+sbn FiltrationPrefab r11 Mode r0
+sbn OutPumpPrefab r11 On r0
+lbn r1 FiltrationPrefab r11 PressureOutput2 Maximum
+sgtz r1 r1
+sbn WastePumpPrefab r11 On r1
+j NextSet
+NextSet:
+add r9 r9 1
+j FiltrationLoop
+EndFiltrationLoop:
+yield
+j loop

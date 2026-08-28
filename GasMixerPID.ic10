@@ -1,0 +1,70 @@
+alias PauseSwitch d0
+alias PipeAnalyser d1
+alias GasMixer d2
+
+define TargetTemp 298.15
+define Kp 1.2
+define Ki 0.08
+define Kd 0.25
+define OverallGain 1
+define TickSeconds 0.5
+
+define MixSettingMin 0
+define MixSettingMax 100
+define IntegralClamp 25
+define IntegralClampMin -25
+define DeadbandK 0.05
+
+move r10 0
+move r11 0
+move r15 MixSettingMin
+
+MainLoop:
+l r0 PauseSwitch Setting
+blez r0 Paused
+l r1 PipeAnalyser Temperature
+
+sub r2 TargetTemp r1
+abs r3 r2
+ble r3 DeadbandK Hold
+
+mul r4 r2 TickSeconds
+add r10 r10 r4
+min r10 r10 IntegralClamp
+max r10 r10 IntegralClampMin
+
+sub r5 r2 r11
+div r5 r5 TickSeconds
+
+mul r6 Kp r2
+mul r7 Ki r10
+mul r8 Kd r5
+add r9 r6 r7
+add r9 r9 r8
+mul r9 r9 OverallGain
+
+add r12 r15 r9
+max r12 r12 MixSettingMin
+min r12 r12 MixSettingMax
+
+s GasMixer On 1
+s GasMixer Setting r12
+move r11 r2
+move r15 r12
+
+yield
+j MainLoop
+
+Hold:
+s GasMixer On 1
+s GasMixer Setting r15
+move r11 r2
+
+yield
+j MainLoop
+
+Paused:
+s GasMixer On 0
+
+yield
+j MainLoop

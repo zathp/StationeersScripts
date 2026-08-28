@@ -1,0 +1,39 @@
+# Mode router for split satellite scripts
+# d1 shared memory queue, d5 mode dial
+# Queue slot 2 mode:
+# 0 force broad, 1 force narrow, 2 auto-broad, 3 auto-narrow, 4 off
+
+alias queue d1
+alias MD d5
+
+define ModeSlot 2
+
+move r1 0
+
+Loop:
+l r0 MD Setting
+blt r0 0.5 MOff
+blt r0 1.5 M0
+blt r0 2.5 M1
+move r0 2
+j HaveMode
+
+MOff:
+move r0 4
+j HaveMode
+
+M0:
+move r0 0
+j HaveMode
+
+M1:
+move r0 1
+
+HaveMode:
+beq r0 r1 NoChange
+put queue ModeSlot r0
+move r1 r0
+
+NoChange:
+yield
+j Loop

@@ -1,0 +1,121 @@
+# Reads buttons and pressure, then publishes the airlock state via this housing Setting.
+define Door1H -793837322
+define Door1NH HASH("Airlock Interior")
+define IntKpa 0
+define Door2H -793837322
+define Door2NH HASH("Airlock Exterior")
+define ExtKpa 0
+alias GasSen d0
+alias Override d1
+define ButtH 491845673
+define ButtN HASH("Button")
+
+alias state r8
+alias lastPress r9
+
+startup:
+move lastPress 0
+lbn r0 Door1H Door1NH Open Maximum
+lbn r1 Door2H Door2NH Open Maximum
+sgtz r1 r1
+xor r2 1 r1
+sgtz r0 r0
+and r2 r2 r0
+beqz r2 else
+move state 1
+j endif
+else:
+move state 2
+endif:
+s db Setting state
+yield
+
+start:
+jal checkOverride
+jal searchForPress
+not r1 lastPress
+and r1 r1 r0
+move lastPress r0
+jal stateMachine
+s db Setting state
+yield
+j start
+
+stateMachine:
+bge state 8 startup
+bge state 4 running
+beq state 3 holdOpen
+mod r0 state 2
+sbn Door1H Door1NH Setting r0
+sub r0 1 r0
+sbn Door2H Door2NH Setting r0
+beqz r1 endstateMachine
+and r0 state 1
+or state 4 r0
+j endstateMachine
+
+holdOpen:
+j endstateMachine
+
+running:
+bge state 6 pressurize
+l r2 GasSen Pressure
+bgt r2 ExtKpa endstateMachine
+add state state 2
+j endstateMachine
+
+pressurize:
+l r2 GasSen Pressure
+mod r0 state 2
+select r3 r0 ExtKpa IntKpa
+blt r2 r3 endstateMachine
+bnez r0 openExtDoor
+move state 1
+j endstateMachine
+
+openExtDoor:
+move state 2
+
+endstateMachine:
+j ra
+
+checkOverride:
+l r3 Override Setting
+beqz r3 clearOverride
+move state 3
+j ra
+
+clearOverride:
+bne state 3 keepState
+move state 8
+keepState:
+j ra
+
+searchForPress:
+lbn r0 ButtH ButtN Setting Maximum
+sgtz r0 r0
+beq Door1H 1736080881 skip1
+lbn r1 Door1H Door1NH Open Maximum
+beqz r1 door1Closed
+lbn r2 Door1H Door1NH Setting Minimum
+j endif1
+door1Closed:
+lbn r2 Door1H Door1NH Setting Maximum
+endif1:
+sne r2 r2 r1
+sbn Door1H Door1NH Setting r1
+or r0 r0 r2
+skip1:
+beq Door2H 1736080881 skip2
+lbn r1 Door2H Door2NH Open Maximum
+beqz r1 door2Closed
+lbn r2 Door2H Door2NH Setting Minimum
+j endif2
+door2Closed:
+lbn r2 Door2H Door2NH Setting Maximum
+endif2:
+sne r2 r2 r1
+sbn Door2H Door2NH Setting r1
+or r0 r0 r2
+skip2:
+j ra

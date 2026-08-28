@@ -1,0 +1,67 @@
+alias HeliumPipe d0
+alias LiquidPipeA d1
+alias LiquidPipeB d2
+alias HeliumHeater d3
+alias PumpA d4
+alias PumpB d5
+
+# Pressure targets for each liquid feed line (kPa).
+define TargetPressureA 2800
+define TargetPressureB 2800
+
+# Pressure error (kPa) that maps to 100% pump setting.
+define PressureBand 1200
+
+# Helium preheat hysteresis band (K).
+define MinHeliumTemp 430
+define MaxHeliumTemp 460
+
+# Persistent heater state latch.
+move r15 0
+
+MainLoop:
+# Read line pressures and helium temperature.
+l r0 LiquidPipeA Pressure
+l r1 LiquidPipeB Pressure
+l r2 HeliumPipe Temperature
+
+# Pump A command from pressure error.
+sub r3 TargetPressureA r0
+max r3 r3 0
+div r3 r3 PressureBand
+mul r3 r3 100
+min r3 r3 100
+sgtz r4 r3
+s PumpA On r4
+s PumpA Setting r3
+
+# Pump B command from pressure error.
+sub r5 TargetPressureB r1
+max r5 r5 0
+div r5 r5 PressureBand
+mul r5 r5 100
+min r5 r5 100
+sgtz r6 r5
+s PumpB On r6
+s PumpB Setting r5
+
+# If either line needs pressurant, maintain helium temp in hysteresis band.
+or r7 r4 r6
+beqz r7 HeaterOff
+
+ble r2 MinHeliumTemp HeaterOn
+bge r2 MaxHeliumTemp HeaterOff
+j ApplyHeater
+
+HeaterOn:
+move r15 1
+j ApplyHeater
+
+HeaterOff:
+move r15 0
+
+ApplyHeater:
+s HeliumHeater On r15
+
+yield
+j MainLoop

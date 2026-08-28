@@ -1,0 +1,127 @@
+#Internal Defines
+define Door1H -793837322
+define Door1NH HASH("Airlock Interior")
+define IntKpa 0
+alias VentInt d0
+#External Defines
+define Door2H -793837322
+define Door2NH HASH("Airlock Exterior")
+define ExtKpa 0
+alias VentExt d1
+
+alias GasSen d2
+define ButtH 491845673
+define ButtN HASH("Button")
+#states 1 and 2 doors open
+alias state r8
+alias lastPress r9
+startup:
+move lastPress 0
+sbn Door1H Door1NH Mode 1
+sbn Door2H Door2NH Mode 1
+sbn Door1H Door1NH Lock 0
+sbn Door2H Door2NH Lock 0
+lbn r0 Door1H Door1NH Open Maximum #inside
+lbn r1 Door2H Door2NH Open Maximum #outside
+sgtz r1 r1
+xor r2 1 r1
+sgtz r0 r0
+and r2 r2 r0
+beqz r2 else
+sbn Door1H Door1NH Open 1
+move state $1
+j endif
+else:
+sbn Door1H Door1NH Open 0
+sbn Door2H Door2NH Open 1
+move state $2
+endif:
+yield
+start:
+jal searchForPress #ret r0 1 when press
+not r1 lastPress
+and r1 r1 r0
+move lastPress r0 #debounce on r1
+jal stateMachine
+s db Setting state
+yield
+j start
+stateMachine:
+bge state 8 startup
+bge state 4 running
+s VentInt On 0
+s VentExt On 0
+mod r0 state 2
+sbn Door1H Door1NH Open r0
+sbn Door1H Door1NH Setting r0
+sub r0 1 r0
+sbn Door2H Door2NH Open r0
+sbn Door2H Door2NH Setting r0
+# if button pressed (r1), start cycle
+beqz r1 endstateMachine
+sbn Door1H Door1NH Open 0
+sbn Door2H Door2NH Open 0
+and r0 state 1
+or state 4 r0
+j endstateMachine
+running:
+mod r0 state 2           # ones bit: 1=interior, 0=exterior
+sub r1 1 r0              # complement: 0=interior, 1=exterior
+bge state 6 pressurize
+l r2 GasSen Pressure
+s VentInt Mode 1         # Siphon
+s VentExt Mode 1         # Siphon
+s VentInt On r0
+s VentExt On r1
+bgt r2 ExtKpa endstateMachine
+s VentInt On 0
+s VentExt On 0
+add state state 2
+j endstateMachine
+pressurize:
+l r2 GasSen Pressure
+s VentInt Mode 0         # Infuse
+s VentExt Mode 0         # Infuse
+s VentExt On r0
+s VentInt On r1
+select r3 r0 ExtKpa IntKpa  # ones=1(interior)->ExtKpa, ones=0(exterior)->IntKpa
+blt r2 r3 endstateMachine
+s VentExt On 0
+s VentInt On 0
+bnez r0 openExtDoor
+sbn Door1H Door1NH Open 1  # state 6: came from exterior, open interior door
+move state 1
+j endstateMachine
+openExtDoor:
+sbn Door2H Door2NH Open 1  # state 7: came from interior, open exterior door
+move state 2
+endstateMachine:
+j ra #EndFunc
+searchForPress:
+lbn r0 ButtH ButtN Setting Maximum #Button press
+sgtz r0 r0
+beq Door1H 1736080881 skip1
+lbn r1 Door1H Door1NH Open Maximum
+beqz r1 door1Closed
+lbn r2 Door1H Door1NH Setting Minimum
+j endif1
+door1Closed:
+lbn r2 Door1H Door1NH Setting Maximum
+endif1:
+sne r2 r2 r1 # is button pressed?
+sbn Door1H Door1NH Setting r1 # debounce
+or r0 r0 r2
+skip1:
+beq Door2H 1736080881 skip2
+lbn r1 Door2H Door2NH Open Maximum
+beqz r1 door2Closed
+lbn r2 Door2H Door2NH Setting Minimum
+j endif2
+door2Closed:
+lbn r2 Door2H Door2NH Setting Maximum
+endif2:
+sne r2 r2 r1 # is button pressed?
+sbn Door2H Door2NH Setting r1 # debounce
+or r0 r0 r2
+skip2:
+j ra

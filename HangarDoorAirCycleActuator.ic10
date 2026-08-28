@@ -1,0 +1,103 @@
+# chip 2 actuator: d0 = controller housing chip
+alias CtrlMem d0
+
+define DoorH HASH("StructureMediumHangerDoor")
+define DoorN HASH("7x7 Hangar East")
+define VentH HASH("StructurePoweredVentLarge")
+define VentN HASH("7x7 Hangar East Depress Vent")
+define O2H HASH("StructurePoweredVentLarge")
+define O2N HASH("7x7 Hangar East O2 Supply")
+
+# State values from the handwritten controller.
+define StateOpen 0
+define StateClosed 1
+define StateDepressExt 2
+define StatePressExt 3
+define StateDepressInt 4
+define StatePressInt 5
+define StateIntAtmo 6
+
+startup:
+sbn DoorH DoorN Mode 1
+sbn DoorH DoorN Open 0
+sbn DoorH DoorN Lock 0
+sbn VentH VentN On 0
+sbn O2H O2N On 0
+yield
+
+main:
+l r0 CtrlMem Setting
+beq r0 StateOpen stateOpen
+beq r0 StateClosed stateClosed
+beq r0 StateDepressExt stateDepressExt
+beq r0 StatePressExt statePressExt
+beq r0 StateDepressInt stateDepressInt
+beq r0 StatePressInt statePressInt
+beq r0 StateIntAtmo stateIntAtmo
+j stateClosed
+
+stateOpen:
+s db Setting r0
+sbn DoorH DoorN Open 1
+sbn DoorH DoorN Lock 0
+sbn VentH VentN On 0
+sbn O2H O2N On 0
+yield
+j main
+
+stateClosed:
+s db Setting r0
+sbn DoorH DoorN Open 0
+sbn DoorH DoorN Lock 1
+sbn VentH VentN On 0
+sbn O2H O2N On 0
+yield
+j main
+
+stateDepressExt:
+s db Setting r0
+sbn DoorH DoorN Open 0
+sbn DoorH DoorN Lock 1
+sbn O2H O2N On 0
+sbn VentH VentN Mode 1
+sbn VentH VentN On 1
+yield
+j main
+
+statePressExt:
+s db Setting r0
+sbn DoorH DoorN Open 0
+sbn DoorH DoorN Lock 1
+sbn O2H O2N On 0
+sbn VentH VentN Mode 0
+sbn VentH VentN On 1
+yield
+j main
+
+stateDepressInt:
+s db Setting r0
+sbn DoorH DoorN Open 0
+sbn DoorH DoorN Lock 1
+sbn O2H O2N On 0
+sbn VentH VentN Mode 1
+sbn VentH VentN On 1
+yield
+j main
+
+statePressInt:
+s db Setting r0
+sbn DoorH DoorN Open 0
+sbn DoorH DoorN Lock 1
+sbn VentH VentN On 0
+sbn O2H O2N On 1
+yield
+j main
+
+stateIntAtmo:
+s db Setting r0
+sbn DoorH DoorN Open 0
+sbn DoorH DoorN Lock 1
+sbn VentH VentN On 0
+sbn O2H O2N On 0
+yield
+j main

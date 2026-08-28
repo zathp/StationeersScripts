@@ -1,0 +1,99 @@
+alias EnableSwitch d0
+alias RatioSensor d1
+alias PumpA d2
+alias PumpB d3
+define RatioMode 1
+push LogicType.RatioOxygenInput
+push 1
+push LogicType.RatioLiquidOxygenInput
+push -1
+push LogicType.RatioMethaneInput
+push 1
+push LogicType.RatioLiquidMethaneInput
+push -1
+define TargetRatio 0.6667
+define TotalFlowSetting 20
+define TargetTotalMoles 100
+define MolesKp 0.2
+define TotalFlowMin 0
+define TotalFlowMax 100
+define Kp 0.9
+define Ki 0.08
+define Kd 0.12
+define PidDirection 1
+define TickSeconds 0.5
+define DeadbandRatio 0.002
+define IntegralClamp 0.5
+define IntegralClampMin -0.5
+define PumpSettingMin 0
+define PumpSettingMax 100
+define SplitMin 0
+define SplitMax 1
+move r10 0
+move r11 0
+MainLoop:
+l r0 EnableSwitch Setting
+blez r0 Paused
+sub r4 RatioMode 1
+mul r4 r4 4
+add r4 r4 1
+move sp r4
+peek r5
+add r4 r4 2
+move sp r4
+peek r7
+add r4 r4 1
+move sp r4
+peek r8
+move r9 r5
+bltz r8 UseTypeB
+j ReadRatio
+UseTypeB:
+move r9 r7
+ReadRatio:
+l r1 RatioSensor r9
+l r15 RatioSensor TotalMoles
+sub r2 TargetRatio r1
+abs r3 r2
+sgt r3 r3 DeadbandRatio
+mul r2 r2 r3
+mul r4 r2 TickSeconds
+add r10 r10 r4
+min r10 r10 IntegralClamp
+max r10 r10 IntegralClampMin
+sub r5 r2 r11
+div r5 r5 TickSeconds
+mul r6 Kp r2
+mul r7 Ki r10
+mul r8 Kd r5
+add r9 r6 r7
+add r9 r9 r8
+mul r9 r9 PidDirection
+add r12 TargetRatio r9
+max r12 r12 SplitMin
+min r12 r12 SplitMax
+sub r15 TargetTotalMoles r15
+mul r15 r15 MolesKp
+add r15 TotalFlowSetting r15
+max r15 r15 TotalFlowMin
+min r15 r15 TotalFlowMax
+mul r13 r15 r12
+sub r14 1 r12
+mul r14 r15 r14
+max r13 r13 PumpSettingMin
+min r13 r13 PumpSettingMax
+max r14 r14 PumpSettingMin
+min r14 r14 PumpSettingMax
+s PumpA On 1
+s PumpB On 1
+s PumpA Setting r13
+s PumpB Setting r14
+s db Setting r1
+move r11 r2
+yield
+j MainLoop
+Paused:
+s PumpA On 0
+s PumpB On 0
+yield
+j MainLoop

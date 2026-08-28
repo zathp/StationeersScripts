@@ -1,0 +1,104 @@
+alias Larre d0
+alias Debug d1
+
+alias NumTray r5
+alias harv r6
+alias pick r9
+alias basePos r7
+
+MainLoop:
+l r0 db Setting
+bgtz r0 Start
+yield
+j MainLoop
+Start:
+s db Setting 0
+get NumTray db 255
+get basePos db 254
+get harv db 253
+#in
+# Tray positions are basePos+1 through basePos+NumTray.
+harvestUntilEmpty:
+move r8 0
+move r4 basePos
+add r4 r4 1
+#in
+forFH:
+add r0 basePos NumTray
+bgt r4 r0 endforFH
+move r0 r4
+jal LarGo
+yield
+ls r1 Larre 255 Quantity
+blez r1 nextFH
+add r8 r8 1
+ls r0 Larre 255 Mature
+brdns Debug 2
+s Debug Setting r0
+blez r0 nextFH
+#in : harvest individual plot
+whileHarv:
+jal LarAct
+ls r0 Larre 0 Quantity
+blt r0 40 sif
+move r0 harv
+jal LarGo
+jal LarAct
+move r0 r4
+jal LarGo
+sif:
+yield
+ls r0 Larre 255 Quantity
+beqz r0 endwhileHarv
+j whileHarv
+endwhileHarv:
+#out
+nextFH:
+add r4 r4 1
+j forFH
+endforFH:
+#out
+bgtz r8 harvestUntilEmpty
+#out
+move r0 harv
+jal LarGo
+jal LarAct
+get pick db 252
+move r4 basePos
+add r4 r4 1
+#in
+# Same tray range here: basePos+1 through basePos+NumTray.
+forReplant:
+add r0 basePos NumTray
+bgt r4 r0 endforReplant
+move r0 pick
+jal LarGo
+jal LarAct
+move r0 r4
+jal LarGo
+jal LarAct
+add r4 r4 1
+j forReplant
+endforReplant:
+move r0 basePos
+jal LarGo
+#out
+s db Setting -1
+j MainLoop
+
+#r0 position larre goes to
+LarGo:
+s Larre Setting r0
+WhlLG:
+l r1 Larre PositionX
+beq r0 r1 ra
+yield
+j WhlLG
+
+LarAct:
+s Larre Activate 1
+WhlLA:
+yield
+l r0 Larre Extended
+bnez r0 WhlLA
+j ra

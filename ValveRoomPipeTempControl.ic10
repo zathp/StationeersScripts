@@ -1,0 +1,45 @@
+# Turns a digital valve ON when:
+# 1) roomTemp > TempOn AND roomTemp > pipeTemp
+# OR
+# 2) valve is already ON AND roomTemp > TempKeepOn AND roomTemp > pipeTemp
+#
+# This creates hysteresis: TempOn is the higher "turn-on" threshold,
+# TempKeepOn is the lower "stay-on" threshold.
+
+alias RoomSensor d0
+alias PipeAnalyser d1
+alias DigitalValve d2
+
+# High threshold to first turn the valve on (K)
+define TempOn 300.15
+
+# Lower threshold to keep valve on once already running (K)
+define TempKeepOn 298.15
+
+MainLoop:
+# Read temperatures and current valve state.
+l r0 RoomSensor Temperature
+l r1 PipeAnalyser Temperature
+l r2 DigitalValve On
+
+# r3 = roomTemp > pipeTemp
+sgt r3 r0 r1
+
+# r4 = roomTemp > TempOn
+sgt r4 r0 TempOn
+
+# r5 = roomTemp > TempKeepOn
+sgt r5 r0 TempKeepOn
+
+# r6 = valveAlreadyOn AND roomTemp > TempKeepOn
+and r6 r2 r5
+
+# r7 = (roomTemp > TempOn) OR (valveAlreadyOn AND roomTemp > TempKeepOn)
+or r7 r4 r6
+
+# Final command: only on if room is still hotter than the pipe.
+and r8 r3 r7
+s DigitalValve On r8
+
+yield
+j MainLoop

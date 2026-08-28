@@ -1,0 +1,22 @@
+define ComPR 0
+define SorterHash 873418029
+alias dataPtNet db:0
+
+
+l r8 db:0 StackSize
+for:
+blez r8 endfor
+sub r8 r8 1
+get r0 db:0 r8
+s db Setting r0
+l r1 r0 PrefabHash
+bne r1 SorterHash for
+l r1 r0 NameHash
+and r1 r1 $ffffffff
+sll r1 r1 8 
+and r3 SorterInstruction.FilterPrefabHashEquals $FF
+or r1 r1 r3
+put r0 0 r1
+s r0 On 1
+j for
+endfor:

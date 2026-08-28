@@ -1,0 +1,61 @@
+# d0 = controller housing, d1 = console
+# Writes a text hash for the current door/cycle state to the console Setting.
+alias Controller d0
+alias Console d1
+
+define StateOpen 1
+define StateClosed 2
+define StateDepress 4
+define StateExtPress 5
+define StateO2Press 6
+define StateO2Depress 7
+
+define TxtOpen STR("OPEN")
+define TxtClosed STR("CLOSED")
+define TxtDepress STR("EDEPRS")
+define TxtExtPress STR("EPRESS")
+define TxtO2Press STR("O2PRES")
+define TxtO2Depress STR("O2DEPR")
+define TxtUnknown STR("UNKNWN")
+
+main:
+l r0 Controller Setting
+beq r0 StateOpen showOpen
+beq r0 StateClosed showClosed
+beq r0 StateDepress showDepress
+beq r0 StateExtPress showExtPress
+beq r0 StateO2Press showO2Press
+beq r0 StateO2Depress showO2Depress
+s Console Setting TxtUnknown
+yield
+j main
+
+showOpen:
+s Console Setting TxtOpen
+yield
+j main
+
+showClosed:
+s Console Setting TxtClosed
+yield
+j main
+
+showDepress:
+s Console Setting TxtDepress
+yield
+j main
+
+showExtPress:
+s Console Setting TxtExtPress
+yield
+j main
+
+showO2Press:
+s Console Setting TxtO2Press
+yield
+j main
+
+showO2Depress:
+s Console Setting TxtO2Depress
+yield
+j main

@@ -1,0 +1,128 @@
+# Single-worker deque chip for add/delete commands.
+# d0 must point to the controller/state chip.
+# Handles CMD 1/2/3/4 and writes status/results back to the host.
+
+alias HOST d0
+
+define BUFFER_START 32
+define BUFFER_CAP 448
+
+define STATUS_SLOT 504
+define COUNT_SLOT 506
+define TAIL_SLOT 507
+define HEAD_SLOT 508
+define RESULT_SLOT 509
+define ARG_SLOT 510
+define CMD_SLOT 511
+
+Main:
+l r0 db Setting
+beqz r0 MainYield
+jal Process
+s db Setting 0
+MainYield:
+yield
+j Main
+Process:
+get r0 HOST CMD_SLOT
+put HOST CMD_SLOT 0
+beq r0 1 AddHead
+beq r0 2 AddTail
+beq r0 3 DelHead
+beq r0 4 DelTail
+move r0 -3
+put HOST STATUS_SLOT r0
+j ra
+
+AddHead:
+move r15 0
+j AddCommon
+AddTail:
+move r15 1
+j AddCommon
+AddCommon:
+get r1 HOST COUNT_SLOT
+bge r1 BUFFER_CAP AddFull
+get r2 HOST ARG_SLOT
+beqz r1 AddEmpty
+beqz r15 AddHeadSide
+get r3 HOST TAIL_SLOT
+add r3 r3 1
+mod r3 r3 BUFFER_CAP
+put HOST TAIL_SLOT r3
+j AddWrite
+AddHeadSide:
+get r3 HOST HEAD_SLOT
+add r3 r3 447
+mod r3 r3 BUFFER_CAP
+put HOST HEAD_SLOT r3
+AddWrite:
+add r4 r3 BUFFER_START
+put HOST r4 r2
+add r1 r1 1
+put HOST COUNT_SLOT r1
+put HOST RESULT_SLOT r2
+move r0 1
+put HOST STATUS_SLOT r0
+put HOST CMD_SLOT 0
+j ra
+AddEmpty:
+move r3 0
+add r4 r3 BUFFER_START
+put HOST r4 r2
+put HOST HEAD_SLOT r3
+put HOST TAIL_SLOT r3
+move r1 1
+put HOST COUNT_SLOT r1
+put HOST RESULT_SLOT r2
+move r0 1
+put HOST STATUS_SLOT r0
+j ra
+AddFull:
+move r0 -2
+put HOST STATUS_SLOT r0
+j ra
+
+DelHead:
+move r15 0
+j DelCommon
+DelTail:
+move r15 1
+j DelCommon
+DelCommon:
+get r1 HOST COUNT_SLOT
+beqz r1 DelEmpty
+beqz r15 UseHead
+get r3 HOST TAIL_SLOT
+j DelRead
+UseHead:
+get r3 HOST HEAD_SLOT
+DelRead:
+add r4 r3 BUFFER_START
+get r2 HOST r4
+put HOST RESULT_SLOT r2
+sub r1 r1 1
+put HOST COUNT_SLOT r1
+beqz r1 NowEmpty
+beqz r15 AdvHead
+add r3 r3 447
+mod r3 r3 BUFFER_CAP
+put HOST TAIL_SLOT r3
+j DelDone
+AdvHead:
+add r3 r3 1
+mod r3 r3 BUFFER_CAP
+put HOST HEAD_SLOT r3
+j DelDone
+NowEmpty:
+move r0 0
+put HOST HEAD_SLOT r0
+put HOST TAIL_SLOT r0
+DelDone:
+move r0 1
+put HOST STATUS_SLOT r0
+j ra
+DelEmpty:
+move r0 -1
+put HOST STATUS_SLOT r0
+j ra

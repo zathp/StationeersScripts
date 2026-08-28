@@ -1,0 +1,41 @@
+# d0 = gas sensor, d1 = LED controller/display
+# LED Setting codes: 0=depressurized, 1=transition, 2=pressurized
+alias GasSensor d0
+alias LedCtrl d1
+
+define DepressTarget 0
+define PressTarget 75
+
+define LedDepress 0
+define LedTransition 1
+define LedPress 2
+# Color enum indexes (0-15 style). Adjust if your device uses a different map.
+define ColorRed 2
+define ColorYellow 4
+define ColorGreen 5
+
+main:
+l r0 GasSensor Pressure
+ble r0 DepressTarget showDepress
+blt r0 PressTarget showTransition
+
+showPress:
+s LedCtrl On 1
+s LedCtrl Setting LedPress
+s LedCtrl Color ColorGreen
+yield
+j main
+
+showDepress:
+s LedCtrl On 1
+s LedCtrl Setting LedDepress
+s LedCtrl Color ColorRed
+yield
+j main
+
+showTransition:
+s LedCtrl On 1
+s LedCtrl Setting LedTransition
+s LedCtrl Color ColorYellow
+yield
+j main

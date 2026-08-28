@@ -1,0 +1,20 @@
+alias Flashing d0
+alias SecAtmo d1
+ls r0 db 0 Quantity
+ls r1 db 1 Quantity
+
+blt r2 r0 50
+blt r3 r1 50
+
+ls r5 d1 0 Quantity
+ls r6 d1 1 Quantity
+
+blt r7 r5 50
+blt r8 r6 50
+
+and r9 r2 r3
+and r9 r9 r7
+and r9 r9 r8
+
+s Flashing On r9
+

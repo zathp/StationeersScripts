@@ -1,0 +1,85 @@
+alias Avionics d0
+alias ThrustCmd d1
+
+# Set this to your rocket's max total upward thrust in Newtons.
+define MaxThrustN 0
+
+# Set to your local gravity (Moon 1.622, Mars 3.721, Earth-like 9.81).
+define LocalGravity 9.81
+
+# Seconds per script tick (adjust if your update cadence differs).
+define TickSeconds 0.5
+
+# Safeguards to avoid divide-by-zero and noisy edge cases.
+define MinGravity 0.001
+define MinDenominator 0.001
+
+move r15 0
+
+MainLoop:
+# Inputs from avionics.
+l r0 Avionics Mass           # kg
+l r2 Avionics Altitude       # m
+move r3 LocalGravity         # m/s^2
+
+# Desired thrust command (N), typically from a memory or network writer.
+l r12 ThrustCmd Setting
+max r12 r12 0
+min r12 r12 MaxThrustN
+
+# Estimate vertical descent speed from altitude delta.
+beqz r15 InitAlt
+sub r1 r14 r2
+div r1 r1 TickSeconds
+j HaveSpeed
+
+InitAlt:
+move r1 0
+move r15 1
+
+HaveSpeed:
+move r14 r2
+
+# v0 must be positive downward for the equations.
+max r4 r1 0
+
+# Basic validity checks.
+blez r0 Invalid
+blez r2 Invalid
+ble r3 MinGravity Invalid
+ble MaxThrustN 0 Invalid
+blez r12 Invalid
+
+# aThrust = desiredThrust / Mass
+div r5 r12 r0
+
+# Need upward accel margin over gravity: (aThrust - g) > 0
+sub r6 r5 r3
+ble r6 MinDenominator Invalid
+
+# tImpact = (-v0 + sqrt(v0^2 + 2*g*d)) / g
+mul r7 r4 r4
+mul r8 2 r3
+mul r8 r8 r2
+add r7 r7 r8
+sqrt r7 r7
+sub r8 r7 r4
+div r9 r8 r3
+
+# tBurn = v0 / (aThrust - g)
+div r10 r4 r6
+
+# tCountdown = tImpact - tBurn
+sub r11 r9 r10
+
+# Publish countdown in seconds.
+s db Setting r11
+yield
+j MainLoop
+
+Invalid:
+# Negative sentinel: invalid inputs / impossible burn profile.
+move r11 -1
+s db Setting r11
+yield
+j MainLoop

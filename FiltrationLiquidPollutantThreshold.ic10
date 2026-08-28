@@ -1,0 +1,15 @@
+# Liquid pollutant threshold trigger
+# Threshold percent for RatioLiquidPollutantInput.
+define PollutantThresholdPct 10
+
+MainLoop:
+# Read liquid pollutant ratio (0..1) and convert to percent (0..100).
+l r0 db RatioLiquidPollutantInput
+mul r0 r0 100
+
+# Turn output device on when ratio is above threshold, off otherwise.
+sgt r1 r0 PollutantThresholdPct
+s db Mode r1
+
+yield
+j MainLoop

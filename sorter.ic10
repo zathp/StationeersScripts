@@ -1,0 +1,57 @@
+alias sortIron d0
+alias sortCopper d1
+alias sortSilicon d2
+alias sort1 d3
+alias sort2 d4
+alias sort3 d5
+
+define ironOre 1758427767
+define copperOre -707307845
+define siliconOre 1103972403
+define backpack1 -1650383245
+define backpack2 900366130
+define box1 -1976947556
+define box2 -1844547622
+
+and r0 ironOre $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sortIron 0 r0
+
+and r0 copperOre $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sortCopper 0 r0
+
+and r0 siliconOre $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sortSilicon 0 r0
+
+and r0 backpack1 $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sort1 0 r0
+put sort2 0 r0
+put sort3 0 r0
+
+and r0 backpack2 $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sort1 1 r0
+put sort2 1 r0
+put sort3 1 r0
+
+and r0 box1 $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sort1 2 r0
+put sort2 2 r0
+put sort3 2 r0
+
+and r0 box2 $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sort1 3 r0
+put sort2 3 r0
+put sort3 3 r0

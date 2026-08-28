@@ -1,0 +1,127 @@
+alias dish d0
+alias CH d2
+alias CV d3
+alias SP d4
+alias MD d5
+move r5 1
+move r6 1
+move r7 -1
+move r10 0
+move r11 0
+Main:
+l r9 MD Setting
+blt r9 0.5 MDone
+blt r9 1.5 MBroad
+move r10 1
+j MDone
+MBroad:
+move r10 0
+MDone:
+beqz r10 Broad
+j Narrow
+Broad:
+s dish BestContactFilter -1
+l r8 dish SignalStrength
+sgtz r0 r8
+beqz r0 BMove
+move r10 1
+move r7 -1
+move r11 0
+j Narrow
+BMove:
+l r0 dish Horizontal
+add r0 r0 30
+blt r0 360 BSetH
+sub r0 r0 360
+l r1 dish Vertical
+add r1 r1 15
+blt r1 91 BSetV
+move r1 15
+BSetV:
+s dish Vertical r1
+BSetH:
+s dish Horizontal r0
+yield
+j Main
+Narrow:
+l r2 CH Setting
+l r3 CV Setting
+l r4 SP Setting
+mul r2 r2 10
+min r2 r2 360
+mul r3 r3 10
+min r3 r3 90
+max r4 r4 1
+min r4 r4 90
+sub r12 r2 r4
+add r13 r2 r4
+max r12 r12 0
+min r13 r13 360
+sub r14 r3 r4
+add r15 r3 r4
+max r14 r14 0
+min r15 r15 90
+beq r7 -1 Center
+beqz r11 StepH
+Center:
+s dish Horizontal r2
+s dish Vertical r3
+yield
+l r7 dish SignalStrength
+move r11 0
+j Main
+StepV:
+l r0 dish Vertical
+add r0 r0 r6
+blt r0 r14 VLow
+bgt r0 r15 VHigh
+j VApply
+VLow:
+move r0 r14
+move r6 1
+j VApply
+VHigh:
+move r0 r15
+move r6 -1
+VApply:
+s dish Vertical r0
+j AStep
+StepH:
+l r0 dish Horizontal
+add r0 r0 r5
+blt r0 r12 HLow
+bgt r0 r13 HHigh
+j HApply
+HLow:
+move r0 r12
+move r5 1
+j HApply
+HHigh:
+move r0 r13
+move r5 -1
+HApply:
+s dish Horizontal r0
+AStep:
+yield
+l r8 dish SignalStrength
+beq r8 -1 Lost
+beq r7 -1 Store
+sub r1 r8 r7
+bgtz r1 Store
+beqz r11 FlipH
+mul r6 r6 -1
+j Store
+FlipH:
+mul r5 r5 -1
+Store:
+move r7 r8
+beqz r11 ToV
+move r11 0
+j Main
+ToV:
+move r11 1
+j Main
+Lost:
+move r7 -1
+blt r9 0.5 MBroad
+j Main

@@ -1,0 +1,53 @@
+alias arc r15
+move arc -247344692
+alias Stacker d0
+move sp 0
+#Enter Number of Furnaces to Control
+push 5 #num devices
+#Enter List of Furnaces to Control
+#list of device ID
+push HASH("ARC1")
+push HASH("ARC2")
+push HASH("ARC3")
+push HASH("ARC4")
+push HASH("ARC5")
+#end list
+s Stacker Mode 0
+start:
+move sp 1
+peek r2
+sub r0 0 r2
+add r2 r2 1
+move sp r2
+loop:
+sleep 0.02
+ls r6 Stacker 2 Quantity
+l r7 Stacker Setting
+bgt r6 r7 skipStacker
+beqz r6 skipStacker
+l r8 Stacker Activate
+s db Setting r8
+move r8 1
+s Stacker Activate r8
+sleep 0.02
+move r8 0
+s Stacker Activate r8
+s Stacker Mode r8
+skipStacker:
+peek r0
+jal furnaceRun
+sub sp sp 1
+bgt sp 1 loop
+j start
+
+furnaceRun:
+lbn r1 arc r0 Idle Maximum
+lbns r2 arc r0 0 Occupied Maximum
+s db Setting r0
+sgtz r2 r2
+sgtz r1 r1
+and r2 r2 r1
+beqz r2 skip
+sbn arc r0 Activate r2
+skip:
+j ra

@@ -1,0 +1,61 @@
+define Mask20 1048575
+define DestShift 20
+define TableCountSlot 20
+alias RouteTx d0
+alias SourceHashTx d1
+alias DestHashTx d2
+alias routeValue r0
+alias trigger r1
+alias lastTrigger r2
+alias lookupKey r3
+alias sourceHash r4
+alias destHash r5
+alias tableCount r6
+alias tableIndex r7
+alias tableEntry r8
+alias tableMasked r9
+start:
+jal InitStationTable
+move lastTrigger 0
+loop:
+l trigger RouteTx Setting
+beq trigger lastTrigger loopYield
+move lastTrigger trigger
+beqz trigger loopYield
+move routeValue trigger
+and lookupKey routeValue Mask20
+jal LookupFullHash
+move sourceHash lookupKey
+srl lookupKey routeValue DestShift
+and lookupKey lookupKey Mask20
+jal LookupFullHash
+move destHash lookupKey
+s SourceHashTx Setting sourceHash
+s DestHashTx Setting destHash
+loopYield:
+yield
+j loop
+# Add a station per put db line below and bump tableCount to match.
+InitStationTable:
+move tableCount 2
+put db TableCountSlot tableCount
+put db 0 HASH("Outpost Station")
+put db 1 HASH("Main Station")
+j ra
+# lookupKey in: masked 20-bit id. lookupKey out: matching full hash, or 0 if not found.
+LookupFullHash:
+get tableCount db TableCountSlot
+move tableIndex 0
+lookupLoop:
+bge tableIndex tableCount lookupMiss
+get tableEntry db tableIndex
+and tableMasked tableEntry Mask20
+beq tableMasked lookupKey lookupHit
+add tableIndex tableIndex 1
+j lookupLoop
+lookupHit:
+move lookupKey tableEntry
+j ra
+lookupMiss:
+move lookupKey 0
+j ra

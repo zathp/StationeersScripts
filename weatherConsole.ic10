@@ -1,0 +1,100 @@
+alias WeatherStation d0
+alias StormSwitch d1
+#alias WeatherLED d2
+
+alias WeatherMode r0
+alias NextWEventTime r9
+alias FlashLED r7
+
+define One 1
+define Zero 0
+
+define FlashingLight -1535893860
+define LED 1944485013
+define Speaker -828056979
+define WeatherLED -815193061
+
+sb WeatherLED Setting 0
+move r10 0
+move r12 0
+
+Start:
+sleep 0.5
+l r0 WeatherStation Mode
+
+# Rising edge: storm incoming (Mode==1) sets the switch on.
+seq r3 r0 1
+seq r4 r10 0
+and r5 r3 r4
+beqz r5 SkipStormEdge
+s StormSwitch Open 1
+sb Speaker Mode 8
+SkipStormEdge:
+
+# Falling edge: weather clear (Mode<=0 after storm) sets the switch off.
+sgtz r11 r0
+seq r13 r11 0
+seq r14 r12 1
+and r15 r13 r14
+beqz r15 SkipClearEdge
+s StormSwitch Open 0
+SkipClearEdge:
+
+move r10 r3
+move r12 r11
+
+# Speaker follows switch and storm state.
+l r6 StormSwitch Setting
+and r6 r6 r11
+seq r15 r0 1
+select r1 r15 8 7
+mul r1 r1 r6
+sb Speaker Mode r1
+sb Speaker On r6
+
+move r9 0
+bgtz r0 TimeHandle
+j NoWeather
+
+TimeHandle:
+l r9 WeatherStation NextWeatherEventTime
+div r9 r9 60
+jal BuildTimeDisplay
+sb WeatherLED Setting r7
+xor r8 r8 1
+sb FlashingLight On r8
+sb LED On 1
+seq r2 r0 1 # If r0 is 1(Incoming storm) then r2 is true(1)
+select r1 r2 50 10 # r2 index to 10 half and 100 Full
+sb Speaker Volume r1
+select r1 r2 4 5 # Yellow 5 and Red 4
+sb LED Color r1 
+j Start
+
+NoWeather:
+sb LED Color 2 # Green 
+sb LED On 1
+sb FlashingLight On 0
+j Start
+
+BuildTimeDisplay:
+    # Whole minutes
+    floor r1 r9
+    # Fractional minutes
+    sub r2 r9 r1
+    # Convert fraction to seconds
+    mul r2 r2 60
+    round r2 r2
+    # Handle exactly 60 seconds
+    bge r2 60 AddMinute
+    # Convert seconds to decimal portion
+    div r2 r2 100
+    # Add minutes + seconds
+    add r7 r1 r2
+    j ra
+
+AddMinute:
+    add r1 r1 1
+    move r2 0
+    add r7 r1 r2
+    j ra

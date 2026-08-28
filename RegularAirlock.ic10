@@ -1,0 +1,98 @@
+# Single-vent airlock controller for one interior door and one exterior door.
+# Pressure is read in kPa from the room gas sensor.
+# Only one vent is ever active at a time.
+
+define VacuumPressure 0 # kPa
+define RoomPressure 100 # kPa
+
+alias Vent d0
+alias RoomGasSensor d1
+alias InteriorDoor d2
+alias ExteriorDoor d3
+
+alias state r8
+
+startup:
+s InteriorDoor Mode 1
+s ExteriorDoor Mode 1
+s InteriorDoor Lock 0
+s ExteriorDoor Lock 0
+l r0 InteriorDoor Open
+sgtz r0 r0
+bnez r0 innerOpen
+l r1 ExteriorDoor Open
+sgtz r1 r1
+bnez r1 outerOpen
+move state 1
+j startupDone
+
+innerOpen:
+move state 1
+j startupDone
+
+outerOpen:
+move state 2
+
+startupDone:
+s db Setting state
+yield
+
+start:
+jal stateMachine
+s db Setting state
+yield
+j start
+
+stateMachine:
+bge state 8 startup
+bge state 4 running
+s Vent On 0
+beq state 1 openInnerDoor
+beq state 2 openOuterDoor
+j endstateMachine
+
+openInnerDoor:
+s InteriorDoor Open 1
+s ExteriorDoor Open 0
+move state 4
+j endstateMachine
+
+openOuterDoor:
+s InteriorDoor Open 0
+s ExteriorDoor Open 1
+move state 6
+j endstateMachine
+
+running:
+s InteriorDoor Open 0
+s ExteriorDoor Open 0
+beq state 4 evacuate
+beq state 6 pressurize
+j endstateMachine
+
+evacuate:
+s Vent Mode 1
+s Vent On 1
+ l r2 RoomGasSensor Pressure
+bgt r2 VacuumPressure endstateMachine
+s Vent On 0
+move state 2
+s ExteriorDoor Open 1
+j endstateMachine
+
+pressurize:
+s Vent Mode 0
+s Vent On 1
+ l r3 InteriorDoor Setting
+ l r4 InteriorDoor Open
+ sne r3 r3 r4
+ bnez r3 skipPressurize
+ l r2 RoomGasSensor Pressure
+blt r2 RoomPressure endstateMachine
+skipPressurize:
+s Vent On 0
+move state 1
+s InteriorDoor Open 1
+
+endstateMachine:
+j ra

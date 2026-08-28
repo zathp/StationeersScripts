@@ -1,0 +1,58 @@
+# Global import-arrival gate for up to 15 printers.
+# Fill slots 0..14 with printer-IC ReferenceIds and slots 16..30 with their
+# matching Autolathe ReferenceIds. Leave either ID at 0 to disable that entry.
+# The matching printer script uses stack slot 442 as its request latch.
+# A changing ImportCount clears only the latch for that printer.
+
+define MAX_PRINTERS 15
+define PRINTER_IC_ID_START 0
+define AUTO_LATHE_ID_START 16
+define LAST_IMPORT_COUNT_START 64
+define WAITING_FOR_IMPORT_SLOT 442
+define INITIALIZED_SLOT 79
+
+get r0 db INITIALIZED_SLOT
+bnez r0 Loop
+move r0 0
+Initialize:
+bge r0 MAX_PRINTERS InitializeDone
+add r1 r0 AUTO_LATHE_ID_START
+get r2 db r1
+beqz r2 InitializeNext
+l r3 r2 ImportCount
+add r1 r0 LAST_IMPORT_COUNT_START
+put db r1 r3
+InitializeNext:
+add r0 r0 1
+j Initialize
+InitializeDone:
+move r0 1
+put db INITIALIZED_SLOT r0
+
+Loop:
+move r0 0
+Scan:
+bge r0 MAX_PRINTERS Tick
+add r1 r0 PRINTER_IC_ID_START
+get r2 db r1
+beqz r2 NextPrinter
+add r1 r0 AUTO_LATHE_ID_START
+get r3 db r1
+beqz r3 NextPrinter
+l r4 r3 ImportCount
+get r5 r2 WAITING_FOR_IMPORT_SLOT
+beqz r5 UpdateLast
+add r1 r0 LAST_IMPORT_COUNT_START
+get r5 db r1
+beq r4 r5 UpdateLast
+move r5 0
+put r2 WAITING_FOR_IMPORT_SLOT r5
+UpdateLast:
+add r1 r0 LAST_IMPORT_COUNT_START
+put db r1 r4
+NextPrinter:
+add r0 r0 1
+j Scan
+Tick:
+yield
+j Loop

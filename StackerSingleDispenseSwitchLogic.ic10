@@ -1,0 +1,92 @@
+# Device mapping by prefab hash + numeric device ID (ReferenceId), not d0/d1 wiring.
+# Update IDs to your actual device IDs from the Logic Reader.
+define StackerDeviceId $00000
+define SwitchDeviceId $00001
+define SorterDeviceId $00002
+
+# Sorter mode values for routing.
+# Set these to match your sorter configuration:
+# - FilteredRouteMode: command-triggered dispense path
+# - NonFilteredRouteMode: switch-triggered dispense path
+define FilteredRouteMode 0
+define NonFilteredRouteMode 1
+
+# End-of-stack command slots on this IC (another IC can write these).
+# put <thisIC> 511 1  -> request one dispense
+# put <thisIC> 511 0  -> no command
+define CmdSlot 511
+define CmdDispenseOne 1
+
+alias lastState r0
+alias state r1
+alias pulse r2
+alias cmd r3
+alias source r4
+alias StackerId r14
+alias SwitchId r15
+alias SorterId r11
+
+move lastState 0
+move state 0
+move pulse 0
+move cmd 0
+move source 0
+move StackerId StackerDeviceId
+move SwitchId SwitchDeviceId
+move SorterId SorterDeviceId
+
+# Ensure stacker is in logic mode.
+move pulse 1
+s StackerId Mode pulse
+move pulse 0
+
+# Seed edge detector from current switch state to avoid startup pulse.
+l lastState SwitchId Setting
+sgtz lastState lastState
+
+loop:
+# External command path from another IC via this chip's stack slot 511.
+get cmd db CmdSlot
+beq cmd CmdDispenseOne fromCommand
+
+# Local switch path (rising edge only).
+l state SwitchId Setting
+sgtz state state
+beq state lastState update
+beqz state update
+move source 0
+j doDispense
+
+fromCommand:
+move source 1
+j doDispense
+
+doDispense:
+# Route by trigger source before dispensing.
+beqz source routeNonFiltered
+move pulse FilteredRouteMode
+s SorterId Mode pulse
+j routeDone
+
+routeNonFiltered:
+move pulse NonFilteredRouteMode
+s SorterId Mode pulse
+
+routeDone:
+# Dispense exactly one item.
+move pulse 1
+s StackerId Setting pulse
+s StackerId Activate pulse
+yield
+move pulse 0
+s StackerId Activate pulse
+
+# Auto-reset switch and clear external command.
+s SwitchId Setting pulse
+put db CmdSlot pulse
+
+update:
+l state SwitchId Setting
+sgtz lastState state
+yield
+j loop

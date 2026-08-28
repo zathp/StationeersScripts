@@ -1,0 +1,52 @@
+define arc -247344692
+
+start:
+move r0 HASH("A1")
+jal furnaceRun
+move r0 HASH("A2")
+jal furnaceRun
+move r0 HASH("A3")
+jal furnaceRun
+move r0 HASH("A4")
+jal furnaceRun
+move r0 HASH("A5")
+jal furnaceRun
+move r0 HASH("A6")
+jal furnaceRun
+move r0 HASH("A7")
+jal furnaceRun
+move r0 HASH("A8")
+jal furnaceRun
+move r0 HASH("A9")
+jal furnaceRun
+move r0 HASH("A10")
+jal furnaceRun
+move r0 HASH("A11")
+jal furnaceRun
+move r0 HASH("A12")
+jal furnaceRun
+move r0 HASH("A13")
+jal furnaceRun
+move r0 HASH("A14")
+jal furnaceRun
+move r0 HASH("A15")
+jal furnaceRun
+move r0 HASH("A16")
+jal furnaceRun
+move r0 HASH("A17")
+jal furnaceRun
+move r0 HASH("A18")
+jal furnaceRun
+yield
+j start
+
+furnaceRun:
+lbn r1 arc r0 Idle Maximum
+lbns r2 arc r0 0 Quantity Maximum
+sgtz r2 r2
+sgtz r1 r1
+and r2 r2 r1
+beqz r2 skip
+sbn arc r0 Activate r2
+skip:
+j ra

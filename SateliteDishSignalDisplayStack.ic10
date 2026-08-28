@@ -1,0 +1,65 @@
+# Satellite dish monitor (stack-based snapshot)
+# d0: dish
+# d1: current horizontal display
+# d2: current vertical display
+# d3: watts to resolve display
+# d4: best horizontal display
+# d5: best vertical display
+# db Setting: best watts reaching contact seen
+
+alias dish d0
+alias curH d1
+alias curV d2
+alias curS d3
+alias bestH d4
+alias bestV d5
+
+move r8 -1    # best watts reaching contact
+move r9 0     # best horizontal
+move r10 0    # best vertical
+
+Loop:
+# Read current dish values.
+l r0 dish Horizontal
+l r1 dish Vertical
+l r2 dish WattsReachingContact
+l r4 dish MinimumWattsToContact
+sub r5 r4 r2
+max r5 r5 0
+
+# Show current pointing and watts needed to resolve.
+s curH Setting r0
+s curV Setting r1
+s curS Setting r5
+
+# Update best if watts value is valid and stronger.
+beq r2 -1 Publish
+sgt r3 r2 r8
+beqz r3 Publish
+move r8 r2
+move r9 r0
+move r10 r1
+
+# Stack-write a best snapshot, then pop to publish.
+push r10
+push r9
+push r8
+pop r11
+pop r12
+pop r13
+
+# r11=bestWatts, r12=bestHorizontal, r13=bestVertical
+s db Setting r11
+s bestH Setting r12
+s bestV Setting r13
+
+yield
+j Loop
+
+Publish:
+s db Setting r8
+s bestH Setting r9
+s bestV Setting r10
+
+yield
+j Loop

@@ -1,0 +1,70 @@
+define sort0 $1624F
+define sort1 $16252
+define sort2 $1624A
+define sort3 $1624B
+define sort4 $16243
+define sort5 $16244
+define sort6 $16235
+define sort7 $16238
+
+define slotclss SlotClass.Ingot
+define ComPR 0
+
+
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $04
+put sort0 0 r0
+
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $04
+put sort1 0 r0
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $04
+put sort2 0 r0
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $04
+put sort3 0 r0
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $03
+put sort4 0 r0
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $04
+put sort5 0 r0
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $04
+put sort6 0 r0
+
+move r0 slotclss
+sll r0 r0 8
+or r0 r0 ComPR
+sll r0 r0 8
+or r0 r0 $04
+put sort7 0 r0

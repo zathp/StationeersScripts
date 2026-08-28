@@ -1,0 +1,127 @@
+define NumTray 9
+define drop 2
+define pick 1
+define harv 3
+define basePos 3
+
+alias Larre d0
+alias queue d1
+alias SubProc d2
+
+alias curPos r4
+
+s queue ClearMemory 1
+yield
+s queue ClearMemory 0
+MainLoop:
+move r4 0
+whileNT:
+jal CheckHarvest
+move r0 r4
+jal QueueHarvest
+move r4 r0
+yield
+blt r4 NumTray whileNT #loop until replanting ready
+jal FinishHarvest
+j MainLoop
+
+CheckHarvest:
+push r4
+push ra
+move curPos basePos
+add curPos curPos 1
+# Tray positions are basePos+1 through basePos+NumTray.
+HLoop:
+move r0 curPos
+jal LarGo
+yield
+ls r0 Larre 255 MaturityRatio
+s db Setting r0
+ls r0 Larre 255 Mature
+blt r0 1 nMat
+s queue SettingInput curPos # add to queue
+nMat:
+add r0 NumTray basePos
+blt curPos r0 HNext
+pop ra
+pop r4
+j ra
+HNext:
+add curPos curPos 1
+j HLoop
+
+#r0 provides total prev harvested
+QueueHarvest:
+push r4
+push r5
+push r6
+push ra
+move r5 r0
+move curPos 0
+l r6 queue Quantity
+#loop through found plants
+for:
+bge curPos r6 endfor
+l r0 queue SettingOutput
+s queue Activate 1
+jal LarGo
+yield
+loopH:
+bge r5 NumTray endfor #check num harvested
+ls r1 Larre 255 Quantity
+beqz r1 endloopH
+ls r2 Larre 255 Mature
+blez r2 endloopH
+jal LarAct#harvest
+yield
+add r5 r5 1 #increment num harvest
+j loopH
+endloopH:
+add curPos curPos 1
+j for
+endfor:
+s queue ClearMemory 1
+move r0 drop
+jal LarGo
+s queue ClearMemory 0
+jal LarAct #deposit
+move r0 basePos
+jal LarGo
+move r0 r5
+pop ra
+pop r6
+pop r5
+pop r4
+j ra
+
+FinishHarvest:
+put SubProc 255 NumTray
+put SubProc 254 basePos
+put SubProc 253 harv
+put SubProc 252 pick
+s SubProc Setting 1
+loopF:
+l r0 SubProc Setting
+bltz r0 endloopF
+yield
+j loopF
+endloopF:
+s SubProc Setting 0
+j ra
+
+#r0 position larre goes to
+LarGo:
+s Larre Setting r0
+WhlLG:
+l r1 Larre PositionX
+beq r0 r1 ra
+yield
+j WhlLG
+
+LarAct:
+s Larre Activate 1
+WhlLA:
+yield
+l r0 Larre Idle
+beqz r0 WhlLA
+j ra

@@ -1,0 +1,108 @@
+define OP_GotoStationHash 1
+define OP_WaitForIdle 9
+define OP_WaitForCargoEmpty 11
+define OP_DeleteTimetable 16
+define OP_ToggleCargoBay 17
+define OP_WaitForStationHash 20
+define OP_StackPointer 63
+define PhaseSourceLoad 1
+define PhaseDestUnload 2
+alias Train d0
+alias SourceHashTx d1
+alias DestHashTx d2
+alias sourceHash r0
+alias destHash r1
+alias lastSourceHash r2
+alias lastDestHash r3
+alias phase r4
+alias idle r5
+alias stationHash r6
+alias cargoQty r7
+alias cmd r8
+alias slotIdx r9
+start:
+move phase 0
+move lastSourceHash 0
+move lastDestHash 0
+loop:
+l sourceHash SourceHashTx Setting
+l destHash DestHashTx Setting
+beq sourceHash lastSourceHash checkDestChange
+routeChanged:
+move lastSourceHash sourceHash
+move lastDestHash destHash
+beqz sourceHash loopYield
+beqz destHash loopYield
+move phase PhaseSourceLoad
+jal ProgramPhase
+j loopYield
+checkDestChange:
+bne destHash lastDestHash routeChanged
+jal AutoAdvance
+loopYield:
+yield
+j loop
+AutoAdvance:
+beqz phase endAutoAdvance
+l idle Train Idle
+beqz idle endAutoAdvance
+l stationHash Train PositionX
+beq phase PhaseSourceLoad checkSourceLoaded
+bne stationHash destHash endAutoAdvance
+l cargoQty Train Quantity
+bnez cargoQty endAutoAdvance
+move phase PhaseSourceLoad
+jal ProgramPhase
+j endAutoAdvance
+checkSourceLoaded:
+bne stationHash sourceHash endAutoAdvance
+l cargoQty Train Quantity
+beqz cargoQty endAutoAdvance
+move phase PhaseDestUnload
+jal ProgramPhase
+endAutoAdvance:
+j ra
+# phase picks load or unload; hashes come from the decoder chip's transmitters.
+ProgramPhase:
+move slotIdx 0
+move cmd OP_DeleteTimetable
+jal WriteStep
+beq phase PhaseSourceLoad skipPreClose
+jal CloseBay
+skipPreClose:
+move stationHash destHash
+beq phase PhaseDestUnload useTarget
+move stationHash sourceHash
+useTarget:
+s Train Setting stationHash
+move cmd OP_GotoStationHash
+jal WriteStep
+move cmd OP_WaitForStationHash
+jal WriteStep
+jal OpenBay
+beq phase PhaseSourceLoad waitIdle
+move cmd OP_WaitForCargoEmpty
+jal WriteStep
+jal CloseBay
+j finishPhase
+waitIdle:
+move cmd OP_WaitForIdle
+jal WriteStep
+finishPhase:
+move cmd OP_StackPointer
+put Train 63 cmd
+j ra
+WriteStep:
+put Train slotIdx cmd
+add slotIdx slotIdx 1
+j ra
+OpenBay:
+move cmd 1
+sla cmd cmd 8
+or cmd cmd OP_ToggleCargoBay
+j WriteStep
+CloseBay:
+move cmd 0
+sla cmd cmd 8
+or cmd cmd OP_ToggleCargoBay
+j WriteStep

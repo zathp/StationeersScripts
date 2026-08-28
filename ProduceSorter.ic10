@@ -1,0 +1,22 @@
+alias sort1 d0
+define itemCorn HASH("ItemCorn")
+define itemMush HASH("ItemMushroom")
+define itemDecayed HASH("DecayedFood")
+
+
+and r0 itemCorn $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sort1 0 r0
+
+and r0 itemMush $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sort1 1 r0
+
+and r0 itemDecayed $ffffffff
+sll r0 r0 8
+or r0 r0 $01
+put sort1 2 r0
+
+s sort1 Mode 2

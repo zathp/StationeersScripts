@@ -1,0 +1,132 @@
+alias ThrustCmd d0
+alias LiquidPipeA d1
+alias LiquidPipeB d2
+alias HeliumHeater d3
+alias PumpA d4
+alias PumpB d5
+
+# HeliumHeater reports its own contents Temperature, freeing a pin for ThrustCmd.
+
+# Helium preheat PID setpoint (K); replaces the on/off hysteresis latch.
+define TargetHeliumTemp 445
+define HeaterKp 8
+define HeaterKi 0.5
+define HeaterKd 1.5
+define HeaterIntegralClamp 40
+define HeaterIntegralClampMin -40
+
+# Match MaxThrustN with the value used by RocketConCountdown/RocketConPumpControl.
+define MaxThrustN 0
+# Feed pressure setpoint (kPa) at 100% thrust demand.
+define MaxLinePressure 2800
+
+define PressureKp 0.9
+define PressureKi 0.15
+define PressureKd 0.05
+define PressureIntegralClamp 250
+define PressureIntegralClampMin -250
+
+define TickSeconds 0.5
+
+# Persistent PID state: r10/r11 heater integral+prevErr, r12/r13 pumpA, r14/r15 pumpB.
+move r10 0
+move r11 0
+move r12 0
+move r13 0
+move r14 0
+move r15 0
+
+MainLoop:
+l r0 LiquidPipeA Pressure
+l r1 LiquidPipeB Pressure
+l r2 HeliumHeater Temperature
+l r3 ThrustCmd Setting
+max r3 r3 0
+
+# Demand scale in [0..1]. If MaxThrustN is unset, fall back to binary demand.
+ble MaxThrustN 0 UseBinaryDemand
+div r4 r3 MaxThrustN
+max r4 r4 0
+min r4 r4 1
+j HaveDemand
+
+UseBinaryDemand:
+sgtz r4 r3
+
+HaveDemand:
+# Target line pressure driven directly from thrust demand.
+mul r5 r4 MaxLinePressure
+
+# Pump A pressure PID toward thrust-derived target.
+sub r6 r5 r0
+mul r7 r6 TickSeconds
+add r12 r12 r7
+min r12 r12 PressureIntegralClamp
+max r12 r12 PressureIntegralClampMin
+sub r7 r6 r13
+div r7 r7 TickSeconds
+mul r8 PressureKp r6
+mul r9 PressureKi r12
+add r8 r8 r9
+mul r9 PressureKd r7
+add r8 r8 r9
+max r8 r8 0
+min r8 r8 100
+move r13 r6
+sgtz r0 r8
+s PumpA On r0
+s PumpA Setting r8
+
+# Pump B pressure PID toward thrust-derived target.
+sub r6 r5 r1
+mul r7 r6 TickSeconds
+add r14 r14 r7
+min r14 r14 PressureIntegralClamp
+max r14 r14 PressureIntegralClampMin
+sub r7 r6 r15
+div r7 r7 TickSeconds
+mul r8 PressureKp r6
+mul r9 PressureKi r14
+add r8 r8 r9
+mul r9 PressureKd r7
+add r8 r8 r9
+max r8 r8 0
+min r8 r8 100
+move r15 r6
+sgtz r1 r8
+s PumpB On r1
+s PumpB Setting r8
+
+# Helium heater PID only runs while a feed line is actually pumping.
+or r6 r0 r1
+beqz r6 HeaterOff
+
+sub r7 TargetHeliumTemp r2
+mul r0 r7 TickSeconds
+add r10 r10 r0
+min r10 r10 HeaterIntegralClamp
+max r10 r10 HeaterIntegralClampMin
+sub r0 r7 r11
+div r0 r0 TickSeconds
+mul r1 HeaterKp r7
+mul r8 HeaterKi r10
+add r1 r1 r8
+mul r8 HeaterKd r0
+add r1 r1 r8
+max r1 r1 0
+min r1 r1 100
+sgtz r8 r1
+s HeliumHeater On r8
+s HeliumHeater Setting r1
+move r11 r7
+j MainLoopEnd
+
+HeaterOff:
+s HeliumHeater On 0
+s HeliumHeater Setting 0
+move r10 0
+move r11 0
+
+MainLoopEnd:
+yield
+j MainLoop

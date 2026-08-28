@@ -1,0 +1,48 @@
+# One-time shared-graph programmer for SiloSplitterRouter.ic10.
+# Set ROUTER_DEVICE_ID and the seven splitter ReferenceIds, then run this on a
+# separate IC. The route word's low four bits are hop count; following bits are
+# directions, least-significant first: 0 straight and 1 flipped.
+# Negative maps are cul-de-sacs. This graph has three straight stages, a flipped
+# branch after each stage, and one splitter after the third straight stage.
+
+define ROUTER_DEVICE_ID $00000
+define STRAIGHT_1_ID $00000
+define STRAIGHT_2_ID $00000
+define STRAIGHT_3_ID $00000
+define FLIP_1_ID $00000
+define FLIP_2_ID $00000
+define FLIP_3_ID $00000
+define FINAL_STRAIGHT_ID $00000
+
+# Root: straight -> splitter 2, flipped -> first branch splitter.
+put ROUTER_DEVICE_ID 128 STRAIGHT_1_ID
+put ROUTER_DEVICE_ID 129 131
+put ROUTER_DEVICE_ID 130 140
+
+# Second straight: straight -> third straight, flipped -> second branch splitter.
+put ROUTER_DEVICE_ID 131 STRAIGHT_2_ID
+put ROUTER_DEVICE_ID 132 134
+put ROUTER_DEVICE_ID 133 143
+
+# Third straight: straight -> final splitter, flipped -> third branch splitter.
+put ROUTER_DEVICE_ID 134 STRAIGHT_3_ID
+put ROUTER_DEVICE_ID 135 137
+put ROUTER_DEVICE_ID 136 146
+
+# Leaves: every direction is a cul-de-sac after its splitter is set.
+put ROUTER_DEVICE_ID 137 FINAL_STRAIGHT_ID
+put ROUTER_DEVICE_ID 138 -1
+put ROUTER_DEVICE_ID 139 -1
+put ROUTER_DEVICE_ID 140 FLIP_1_ID
+put ROUTER_DEVICE_ID 141 -1
+put ROUTER_DEVICE_ID 142 -1
+put ROUTER_DEVICE_ID 143 FLIP_2_ID
+put ROUTER_DEVICE_ID 144 -1
+put ROUTER_DEVICE_ID 145 -1
+put ROUTER_DEVICE_ID 146 FLIP_3_ID
+put ROUTER_DEVICE_ID 147 -1
+put ROUTER_DEVICE_ID 148 -1
+
+Done:
+yield
+j Done

@@ -1,0 +1,81 @@
+# Airlock actuator for optional human-trap mode.
+define Door1H -793837322
+define Door1NH HASH("Airlock Interior")
+alias VentInt d0
+define Door2H -793837322
+define Door2NH HASH("Airlock Exterior")
+alias VentExt d1
+alias Controller d2
+alias TrapSwitch d3
+
+startup:
+sbn Door1H Door1NH Mode 1
+sbn Door2H Door2NH Mode 1
+sbn Door1H Door1NH Lock 0
+sbn Door2H Door2NH Lock 0
+yield
+
+start:
+l r0 Controller Setting
+bge r0 8 safe
+bge r0 4 running
+beq r0 3 holdOpen
+s VentInt On 0
+s VentExt On 0
+mod r1 r0 2
+sbn Door1H Door1NH Open r1
+sub r1 1 r1
+sbn Door2H Door2NH Open r1
+yield
+j start
+
+running:
+sbn Door1H Door1NH Open 0
+sbn Door2H Door2NH Open 0
+mod r1 r0 2
+sub r2 1 r1
+bdns TrapSwitch trapOff
+l r3 TrapSwitch Setting
+j trapReadDone
+trapOff:
+move r3 0
+trapReadDone:
+bge r0 6 pressurize
+bnez r3 ventsOff
+s VentInt Mode 1
+s VentExt Mode 1
+s VentInt On r1
+s VentExt On r2
+yield
+j start
+
+pressurize:
+bnez r3 ventsOff
+s VentInt Mode 0
+s VentExt Mode 0
+s VentExt On r1
+s VentInt On r2
+yield
+j start
+
+ventsOff:
+s VentInt On 0
+s VentExt On 0
+yield
+j start
+
+holdOpen:
+s VentInt On 0
+s VentExt On 0
+sbn Door1H Door1NH Open 1
+sbn Door2H Door2NH Open 1
+yield
+j start
+
+safe:
+sbn Door1H Door1NH Open 0
+sbn Door2H Door2NH Open 0
+s VentInt On 0
+s VentExt On 0
+yield
+j start

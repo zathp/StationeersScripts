@@ -1,0 +1,86 @@
+# Queue request receiver for multiple senders.
+# Mailboxes live in the top of this IC's stack: slots 480..494.
+# Register each sender's target address in slots 0..14.
+# For queue requests, hand the payload to the dispatcher chip instead of writing
+# directly to the queue controller, so the dispatcher is the only chip that owns
+# the queue command write path.
+# Item-to-route map: 32 pairs beginning at slots 32..95.
+# Each pair is [item prefab hash, packed route word]. The low four route bits
+# are splitter count; following bits select straight (0) or flipped (1).
+# A route word of 0 is unused. The original item hash is still forwarded.
+
+define MAX_RECEIVERS 15
+define MAILBOX_START 480
+define REGISTRY_START 0
+define ITEM_MAP_START 32
+define ITEM_MAP_COUNT 32
+define ITEM_MAP_STRIDE 2
+define DISPATCHER_DEVICE_ID $00001
+define DISP_BUSY_SLOT 503
+define DISP_ARG_SLOT 500
+define DISP_CMD_SLOT 501
+define DISP_CMD_ENQUEUE 1
+define ROUTER_DEVICE_ID $00002
+define ROUTER_BUSY_SLOT 509
+define ROUTER_ARG_SLOT 510
+define ROUTER_CMD_SLOT 511
+define ROUTER_CMD_ROUTE 1
+define TARGET_ARG_SLOT 510
+define TARGET_CMD_SLOT 511
+define TARGET_CMD_DIRECT 1
+
+move r0 0
+Loop:
+move r1 0
+Scan:
+add r2 r1 MAILBOX_START
+get r3 db r2
+beqz r3 Next
+add r2 r1 REGISTRY_START
+get r4 db r2
+beqz r4 Clear
+move r5 0
+move r6 0
+FindRoute:
+bge r6 ITEM_MAP_COUNT DispatchCheck
+mul r7 r6 ITEM_MAP_STRIDE
+add r7 r7 ITEM_MAP_START
+get r8 db r7
+beq r8 r3 RouteFound
+add r6 r6 1
+j FindRoute
+RouteFound:
+add r7 r7 1
+get r5 db r7
+DispatchCheck:
+beq r4 DISPATCHER_DEVICE_ID QueueCheck
+j RouterCheck
+QueueCheck:
+get r6 DISPATCHER_DEVICE_ID DISP_BUSY_SLOT
+bnez r6 Next
+RouterCheck:
+beqz r5 SendRequest
+get r6 ROUTER_DEVICE_ID ROUTER_BUSY_SLOT
+bnez r6 Next
+put ROUTER_DEVICE_ID ROUTER_ARG_SLOT r5
+put ROUTER_DEVICE_ID ROUTER_CMD_SLOT ROUTER_CMD_ROUTE
+s ROUTER_DEVICE_ID Setting 1
+SendRequest:
+beq r4 DISPATCHER_DEVICE_ID QueueAdd
+put r4 TARGET_ARG_SLOT r3
+put r4 TARGET_CMD_SLOT TARGET_CMD_DIRECT
+s r4 Setting 1
+j Clear
+QueueAdd:
+put DISPATCHER_DEVICE_ID DISP_ARG_SLOT r3
+put DISPATCHER_DEVICE_ID DISP_CMD_SLOT DISP_CMD_ENQUEUE
+s DISPATCHER_DEVICE_ID Setting 1
+Clear:
+move r3 0
+put db r2 r3
+Next:
+add r1 r1 1
+blt r1 MAX_RECEIVERS Scan
+add r0 r0 1
+yield
+j Loop
