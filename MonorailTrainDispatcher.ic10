@@ -1,7 +1,3 @@
-define OP_GotoStationHash 1
-define OP_HonkHorn 8
-define OP_DeleteTimetable 16
-define OP_StackPointer 63
 define PhaseSourceRoute 1
 define PhaseSourceCargo 2
 define PhaseDestRoute 3
@@ -12,7 +8,6 @@ alias Train d0
 define CmdMem 511
 define SourceHashMem 510
 define DestHashMem 509
-define HomeHash HASH("Dock Name")
 alias phase r4
 alias stationHash r5
 alias prevQuantity r6
@@ -20,22 +15,20 @@ alias counter r7
 alias cmd r8
 start:
 move phase 0
+put db CmdMem 0
 loop:
-bnez phase running
+bgtz phase running
 get r0 db CmdMem
 beqz r0 loopYield
 get stationHash db SourceHashMem
 s Train Setting stationHash
-put Train 0 OP_HonkHorn
-put Train 1 OP_GotoStationHash
-put Train 2 OP_DeleteTimetable
-put Train 63 63
 add phase phase 1
 running:
 jal UpdateTrain
 loopYield:
 yield
 j loop
+
 UpdateTrain:
 beqz phase endUpdateTrain
 and r0 phase $000001
@@ -47,11 +40,8 @@ beqz r0 doneUnloading
 j endUpdateTrain
 doneUnloading:
 s Train Open 0
-s Train Setting HomeHash
-put Train 0 OP_HonkHorn
-put Train 1 OP_GotoStationHash
-put Train 2 OP_DeleteTimetable
-put Train 63 63
+l stationHash Train NameHash
+s Train Setting stationHash
 add phase phase 1
 j endUpdateTrain
 LoadCargo:
@@ -65,12 +55,9 @@ j endUpdateTrain
 doneLoading:
 s Train Open 0
 move prevQuantity 0
+move counter 0
 get stationHash db DestHashMem
 s Train Setting stationHash
-put Train 0 OP_HonkHorn
-put Train 1 OP_GotoStationHash
-put Train 2 OP_DeleteTimetable
-put Train 63 63
 add phase phase 1
 j endUpdateTrain
 CheckStationArrival:
