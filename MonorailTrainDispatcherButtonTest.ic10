@@ -1,0 +1,38 @@
+# Button-driven test harness for MonorailTrainDispatcher.ic10
+# Press the button to load a source station, destination station, and command
+# into the same memory slots that the dispatcher reads.
+#
+# Expected memory layout matches MonorailTrainDispatcher.ic10:
+#   CmdMem = 511
+#   SourceHashMem = 510
+#   DestHashMem = 509
+#
+# If your button exposes a different signal field, swap the "Setting" read below.
+
+alias Button d0
+alias Data d1
+
+define CmdMem 511
+define SourceHashMem 510
+define DestHashMem 509
+
+define CmdDispatch 1
+
+define SourceStation HASH("Source Station")
+define DestStation HASH("Destination Station")
+
+start:
+yield
+l r0 Button Setting
+beq r0 1 Trigger
+j start
+
+Trigger:
+# Write the test values into the dispatcher memory slots.
+put Data SourceHashMem SourceStation
+put Data DestHashMem DestStation
+put Data CmdMem CmdDispatch
+
+# Optional: keep the command active for a moment so the dispatcher can react.
+yield
+j start

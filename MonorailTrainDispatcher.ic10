@@ -1,108 +1,90 @@
 define OP_GotoStationHash 1
-define OP_WaitForIdle 9
-define OP_WaitForCargoEmpty 11
+define OP_HonkHorn 8
 define OP_DeleteTimetable 16
-define OP_ToggleCargoBay 17
-define OP_WaitForStationHash 20
 define OP_StackPointer 63
-define PhaseSourceLoad 1
-define PhaseDestUnload 2
+define PhaseSourceRoute 1
+define PhaseSourceCargo 2
+define PhaseDestRoute 3
+define PhaseDestCargo 4
+define PhaseHomeRoute 5
+define MaxCounter 10
 alias Train d0
-alias SourceHashTx d1
-alias DestHashTx d2
-alias sourceHash r0
-alias destHash r1
-alias lastSourceHash r2
-alias lastDestHash r3
+define CmdMem 511
+define SourceHashMem 510
+define DestHashMem 509
+define HomeHash HASH("Dock Name")
 alias phase r4
-alias idle r5
-alias stationHash r6
-alias cargoQty r7
+alias stationHash r5
+alias prevQuantity r6
+alias counter r7
 alias cmd r8
-alias slotIdx r9
 start:
 move phase 0
-move lastSourceHash 0
-move lastDestHash 0
 loop:
-l sourceHash SourceHashTx Setting
-l destHash DestHashTx Setting
-beq sourceHash lastSourceHash checkDestChange
-routeChanged:
-move lastSourceHash sourceHash
-move lastDestHash destHash
-beqz sourceHash loopYield
-beqz destHash loopYield
-move phase PhaseSourceLoad
-jal ProgramPhase
-j loopYield
-checkDestChange:
-bne destHash lastDestHash routeChanged
-jal AutoAdvance
+bnez phase running
+get r0 db CmdMem
+beqz r0 loopYield
+get stationHash db SourceHashMem
+s Train Setting stationHash
+put Train 0 OP_HonkHorn
+put Train 1 OP_GotoStationHash
+put Train 2 OP_DeleteTimetable
+put Train 63 63
+add phase phase 1
+running:
+jal UpdateTrain
 loopYield:
 yield
 j loop
-AutoAdvance:
-beqz phase endAutoAdvance
-l idle Train Idle
-beqz idle endAutoAdvance
-l stationHash Train PositionX
-beq phase PhaseSourceLoad checkSourceLoaded
-bne stationHash destHash endAutoAdvance
-l cargoQty Train Quantity
-bnez cargoQty endAutoAdvance
-move phase PhaseSourceLoad
-jal ProgramPhase
-j endAutoAdvance
-checkSourceLoaded:
-bne stationHash sourceHash endAutoAdvance
-l cargoQty Train Quantity
-beqz cargoQty endAutoAdvance
-move phase PhaseDestUnload
-jal ProgramPhase
-endAutoAdvance:
-j ra
-# phase picks load or unload; hashes come from the decoder chip's transmitters.
-ProgramPhase:
-move slotIdx 0
-move cmd OP_DeleteTimetable
-jal WriteStep
-beq phase PhaseSourceLoad skipPreClose
-jal CloseBay
-skipPreClose:
-move stationHash destHash
-beq phase PhaseDestUnload useTarget
-move stationHash sourceHash
-useTarget:
+UpdateTrain:
+beqz phase endUpdateTrain
+and r0 phase $000001
+bnez r0 CheckStationArrival
+and r0 phase $000002
+bnez r0 LoadCargo
+l r0 Train Quantity
+beqz r0 doneUnloading
+j endUpdateTrain
+doneUnloading:
+s Train Open 0
+s Train Setting HomeHash
+put Train 0 OP_HonkHorn
+put Train 1 OP_GotoStationHash
+put Train 2 OP_DeleteTimetable
+put Train 63 63
+add phase phase 1
+j endUpdateTrain
+LoadCargo:
+l r0 Train Quantity
+seq r1 r0 prevQuantity
+move prevQuantity r0
+mul counter r1 counter
+bge counter MaxCounter doneLoading
+add counter counter r1
+j endUpdateTrain
+doneLoading:
+s Train Open 0
+move prevQuantity 0
+get stationHash db DestHashMem
 s Train Setting stationHash
-move cmd OP_GotoStationHash
-jal WriteStep
-move cmd OP_WaitForStationHash
-jal WriteStep
-jal OpenBay
-beq phase PhaseSourceLoad waitIdle
-move cmd OP_WaitForCargoEmpty
-jal WriteStep
-jal CloseBay
-j finishPhase
-waitIdle:
-move cmd OP_WaitForIdle
-jal WriteStep
-finishPhase:
-move cmd OP_StackPointer
-put Train 63 cmd
+put Train 0 OP_HonkHorn
+put Train 1 OP_GotoStationHash
+put Train 2 OP_DeleteTimetable
+put Train 63 63
+add phase phase 1
+j endUpdateTrain
+CheckStationArrival:
+l r0 Train Idle
+l r1 Train PositionX
+seq r1 r1 stationHash
+and r0 r0 r1
+beqz r0 endUpdateTrain
+add phase phase 1
+blt phase 6 LoadUnload
+move phase 0
+put db CmdMem 0
+j endUpdateTrain
+LoadUnload:
+s Train Open 1
+endUpdateTrain:
 j ra
-WriteStep:
-put Train slotIdx cmd
-add slotIdx slotIdx 1
-j ra
-OpenBay:
-move cmd 1
-sla cmd cmd 8
-or cmd cmd OP_ToggleCargoBay
-j WriteStep
-CloseBay:
-move cmd 0
-sla cmd cmd 8
-or cmd cmd OP_ToggleCargoBay
-j WriteStep
