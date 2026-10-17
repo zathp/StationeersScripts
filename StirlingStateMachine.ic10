@@ -1,0 +1,46 @@
+alias import d0
+alias export d1
+alias pipeAnal d2
+alias pipeAnalIn d3
+
+alias mode r8
+
+define stirling -260316435
+
+sb stirling On 0
+s import On 0
+s export On 0
+s pipeAnal On 1
+move mode 0
+loop:
+yield
+beq mode 0 s0
+beq mode 1 s1
+beq mode 2 s2
+s0:
+sb stirling On 0
+l r0 pipeAnalIn Pressure
+sge r0 r0 500
+s import On r0
+s export On 0
+l r0 pipeAnal Pressure
+sge r0 r0 30000
+beqz r0 loop
+move mode 1
+s1:
+sb stirling On 1
+s import On 0
+s export On 0
+l r0 pipeAnal Temperature
+sle r0 r0 293.15
+beqz r0 loop
+move mode 2
+s2:
+sb stirling On 0
+s import On 0
+s export On 1
+l r0 pipeAnal TotalMoles
+sle r0 r0 50
+beqz r0 loop
+move mode 3
+j s0
