@@ -1,0 +1,81 @@
+# Independent Stirling cycle and room radiator circulation/drain control.
+alias import d0
+alias export d1
+alias pipeAnal d2
+alias pipeAnalIn d3
+alias RoomSensor d4
+alias mode r8
+
+define stirling -260316435
+define ValveH HASH("StructureDigitalValve")
+define PumpH HASH("StructureVolumePump")
+define AnalyserH HASH("StructurePipeAnalysizer")
+# Give both devices of each type the matching name.
+define ValveN HASH("Room Radiator")
+define PumpN HASH("Room Radiator")
+define AnalyserN HASH("Room Radiator")
+define RoomTargetK 283.15
+define StirlingRoomMaxK 303.15
+define EmptyMoles 2
+
+sb stirling On 0
+s import On 0
+s export On 0
+s pipeAnal On 1
+sbn ValveH ValveN On 0
+sbn PumpH PumpN On 0
+move mode 0
+
+loop:
+yield
+jal UpdateRadiators
+jal UpdateStirling
+j loop
+
+UpdateRadiators:
+l r0 RoomSensor Temperature
+sgt r1 r0 RoomTargetK
+# Close the feed before deciding whether circulation/drain can stop.
+sbn ValveH ValveN On r1
+bnez r1 RadiatorPumps
+lbn r0 AnalyserH AnalyserN TotalMoles Maximum
+sge r1 r0 EmptyMoles
+RadiatorPumps:
+sbn PumpH PumpN On r1
+j ra
+
+UpdateStirling:
+beq mode 0 s0
+beq mode 1 s1
+beq mode 2 s2
+s0:
+sb stirling On 0
+l r0 pipeAnalIn Pressure
+sge r0 r0 5000
+s import On r0
+s export On 0
+l r0 pipeAnal Pressure
+sge r0 r0 30000
+beqz r0 StirlingDone
+move mode 1
+s1:
+l r0 RoomSensor Temperature
+sle r0 r0 StirlingRoomMaxK
+sb stirling On r0
+s import On 0
+s export On 0
+l r0 pipeAnal Temperature
+sle r0 r0 293.15
+beqz r0 StirlingDone
+move mode 2
+s2:
+sb stirling On 0
+s import On 0
+s export On 1
+l r0 pipeAnal TotalMoles
+sle r0 r0 50
+beqz r0 StirlingDone
+move mode 0
+j s0
+StirlingDone:
+j ra
